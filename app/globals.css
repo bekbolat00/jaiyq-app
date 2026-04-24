@@ -1,0 +1,130 @@
+@import "tailwindcss";
+
+:root {
+  --background: #060a14;
+  --background-soft: #0b132b;
+  --surface: #16204a;
+  --surface-2: #1c2858;
+  --foreground: #f5f7ff;
+  --muted: #a4afd1;
+  --border: rgba(255, 255, 255, 0.08);
+  --accent: #00f0ff;
+  --accent-strong: #00ffff;
+  --accent-shadow: rgba(0, 240, 255, 0.45);
+  --danger: #ff4d6d;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-background-soft: var(--background-soft);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
+  --color-danger: var(--danger);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+html,
+body {
+  background: var(--background);
+  color: var(--foreground);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-family: var(--font-geist-sans), -apple-system, BlinkMacSystemFont,
+    "Segoe UI", Roboto, sans-serif;
+}
+
+body {
+  background-image:
+    radial-gradient(
+      ellipse 80% 50% at 50% -10%,
+      rgba(0, 240, 255, 0.12),
+      transparent 60%
+    ),
+    radial-gradient(
+      ellipse 60% 50% at 100% 110%,
+      rgba(0, 240, 255, 0.08),
+      transparent 60%
+    );
+  background-attachment: fixed;
+}
+
+/* Glassmorphism utility */
+.glass {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.045) 0%,
+    rgba(255, 255, 255, 0.02) 100%
+  );
+  border: 1px solid var(--border);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.glass-strong {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.08) 0%,
+    rgba(255, 255, 255, 0.03) 100%
+  );
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+/* Premium glass for high-value cards (players, tickets) */
+.glass-premium {
+  background: rgba(11, 19, 43, 0.4);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(0, 240, 255, 0.1);
+}
+
+.accent-glow {
+  box-shadow: 0 10px 40px -10px var(--accent-shadow);
+}
+
+.accent-glow-strong {
+  box-shadow:
+    0 0 0 1px rgba(0, 240, 255, 0.25),
+    0 0 24px -2px rgba(0, 240, 255, 0.55),
+    0 20px 60px -20px rgba(0, 240, 255, 0.35);
+}
+
+/* Hide scrollbars for a cleaner mobile feel */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Diagonal stamp overlay for archived tickets */
+.ticket-stamp {
+  color: rgba(255, 77, 109, 0.85);
+  border: 4px solid rgba(255, 77, 109, 0.75);
+  padding: 6px 18px;
+  border-radius: 8px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  transform: rotate(-14deg);
+  text-shadow: 0 2px 12px rgba(255, 77, 109, 0.35);
+  box-shadow: inset 0 0 0 2px rgba(255, 77, 109, 0.15);
+  backdrop-filter: blur(2px);
+  opacity: 0.9;
+}
+
+/* Subtle safe-area padding for Telegram WebApp */
+.safe-bottom {
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 88px);
+}
+.safe-top {
+  padding-top: calc(env(safe-area-inset-top, 0px) + 8px);
+}

@@ -1,0 +1,226 @@
+import type { Match, Player, Product, Team, Ticket, UserProfile } from "@/lib/types";
+
+export const TEAM_ZHAIYQ: Team = {
+  id: "zhaiyq",
+  shortName: "ЖАЙЫК",
+  fullName: "ФК Жайык",
+  logoUrl: "/teams/zhaiyq.svg",
+};
+
+export const TEAM_OPPONENT: Team = {
+  id: "kairat",
+  shortName: "КАЙРАТ",
+  fullName: "ФК Кайрат",
+  logoUrl: "/teams/kairat.svg",
+};
+
+export const NEXT_MATCH: Match = {
+  id: "m-2026-05-03",
+  home: TEAM_ZHAIYQ,
+  away: TEAM_OPPONENT,
+  // ~3 days from "now" so the countdown feels real on first run
+  kickoffAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000 + 4 * 60 * 60 * 1000).toISOString(),
+  venue: "Центральный стадион, Уральск",
+  competition: "Премьер-Лига Казахстана",
+  ticketUrl: "https://tickets.example.kz/zhaiyq-kairat",
+};
+
+export const PLAYERS: Player[] = [
+  {
+    id: "p-1",
+    firstName: "Ерлан",
+    lastName: "Ахметов",
+    number: 1,
+    position: "Вратарь",
+    squad: "main",
+    photoUrl: "/players/p1.png",
+    stats: { heightCm: 192, weightKg: 85, games: 28, goals: 0 },
+    jerseyProductId: "jersey-home",
+  },
+  {
+    id: "p-2",
+    firstName: "Данияр",
+    lastName: "Сагинтаев",
+    number: 7,
+    position: "Нападающий",
+    squad: "main",
+    photoUrl: "/players/p2.png",
+    stats: { heightCm: 181, weightKg: 76, games: 26, goals: 14 },
+    jerseyProductId: "jersey-home",
+  },
+  {
+    id: "p-3",
+    firstName: "Марат",
+    lastName: "Ибраев",
+    number: 10,
+    position: "Полузащитник",
+    squad: "main",
+    photoUrl: "/players/p3.png",
+    stats: { heightCm: 178, weightKg: 72, games: 27, goals: 9 },
+    jerseyProductId: "jersey-away",
+  },
+  {
+    id: "p-4",
+    firstName: "Асылан",
+    lastName: "Нурпеисов",
+    number: 5,
+    position: "Защитник",
+    squad: "main",
+    photoUrl: "/players/p4.png",
+    stats: { heightCm: 186, weightKg: 80, games: 25, goals: 2 },
+    jerseyProductId: "jersey-home",
+  },
+  {
+    id: "p-5",
+    firstName: "Тимур",
+    lastName: "Жанузаков",
+    number: 22,
+    position: "Полузащитник",
+    squad: "main",
+    photoUrl: "/players/p5.png",
+    stats: { heightCm: 175, weightKg: 70, games: 23, goals: 6 },
+  },
+  {
+    id: "p-6",
+    firstName: "Алишер",
+    lastName: "Кенжебеков",
+    number: 9,
+    position: "Нападающий",
+    squad: "main",
+    photoUrl: "/players/p6.png",
+    stats: { heightCm: 183, weightKg: 78, games: 24, goals: 11 },
+    jerseyProductId: "jersey-away",
+  },
+  {
+    id: "p-a1",
+    firstName: "Нурсултан",
+    lastName: "Оспанов",
+    number: 17,
+    position: "Нападающий (U-19)",
+    squad: "academy",
+    photoUrl: "/players/a1.png",
+    stats: { heightCm: 176, weightKg: 68, games: 14, goals: 7 },
+  },
+  {
+    id: "p-a2",
+    firstName: "Арман",
+    lastName: "Серик",
+    number: 14,
+    position: "Полузащитник (U-19)",
+    squad: "academy",
+    photoUrl: "/players/a2.png",
+    stats: { heightCm: 174, weightKg: 66, games: 15, goals: 3 },
+  },
+  {
+    id: "p-a3",
+    firstName: "Бекзат",
+    lastName: "Турсунов",
+    number: 3,
+    position: "Защитник (U-17)",
+    squad: "academy",
+    photoUrl: "/players/a3.png",
+    stats: { heightCm: 179, weightKg: 70, games: 12, goals: 1 },
+  },
+  {
+    id: "p-a4",
+    firstName: "Ильяс",
+    lastName: "Жумагалиев",
+    number: 11,
+    position: "Вингер (U-17)",
+    squad: "academy",
+    photoUrl: "/players/a4.png",
+    stats: { heightCm: 172, weightKg: 64, games: 13, goals: 5 },
+  },
+];
+
+export const PRODUCTS: Product[] = [
+  {
+    id: "jersey-home",
+    title: "Домашняя джерси 25/26",
+    subtitle: "Basic fit",
+    priceKzt: 24990,
+    imageUrl: "/shop/jersey-home.png",
+    category: "jersey",
+  },
+  {
+    id: "jersey-away",
+    title: "Гостевая джерси 25/26",
+    subtitle: "Basic fit",
+    priceKzt: 24990,
+    imageUrl: "/shop/jersey-away.png",
+    category: "jersey",
+  },
+  {
+    id: "scarf-classic",
+    title: "Шарф «Жайык»",
+    subtitle: "Классика",
+    priceKzt: 6990,
+    imageUrl: "/shop/scarf.png",
+    category: "merch",
+  },
+  {
+    id: "cap-cyan",
+    title: "Кепка Cyan",
+    subtitle: "Adjustable",
+    priceKzt: 8990,
+    imageUrl: "/shop/cap.png",
+    category: "accessory",
+  },
+  {
+    id: "hoodie-navy",
+    title: "Худи Navy",
+    subtitle: "Oversize",
+    priceKzt: 19990,
+    imageUrl: "/shop/hoodie.png",
+    category: "merch",
+  },
+  {
+    id: "mug-logo",
+    title: "Кружка с логотипом",
+    priceKzt: 3490,
+    imageUrl: "/shop/mug.png",
+    category: "merch",
+  },
+];
+
+export const CURRENT_USER: UserProfile = {
+  id: "u-1",
+  displayName: "Бекболат",
+  avatarUrl: undefined,
+  pushAwayMatches: true,
+};
+
+export const TICKETS: Ticket[] = [
+  {
+    id: "t-001",
+    matchId: "m-2026-05-03",
+    opponent: "ФК Кайрат",
+    date: NEXT_MATCH.kickoffAt,
+    sector: "B",
+    row: "12",
+    seat: "34",
+    qrPayload: "ZHAIYQ-TICKET-T001",
+    status: "active",
+    backgroundUrl:
+      "https://images.unsplash.com/photo-1522778119026-d647f0596c20?auto=format&fit=crop&w=1200&q=80",
+  },
+  {
+    id: "t-002",
+    matchId: "m-2026-04-10",
+    opponent: "ФК Астана",
+    date: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString(),
+    sector: "A",
+    row: "5",
+    seat: "12",
+    qrPayload: "ZHAIYQ-TICKET-T002",
+    status: "archived",
+    backgroundUrl:
+      "https://images.unsplash.com/photo-1508098682722-e99c43a406b2?auto=format&fit=crop&w=1200&q=80",
+    finalScore: { home: 2, away: 1 },
+    goals: [
+      { minute: 23, scorer: "Д. Сагинтаев", team: "home" },
+      { minute: 54, scorer: "А. Кенжебеков", team: "home" },
+      { minute: 78, scorer: "M. Tomasov", team: "away" },
+    ],
+  },
+];

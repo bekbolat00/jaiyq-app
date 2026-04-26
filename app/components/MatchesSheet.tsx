@@ -14,8 +14,7 @@ type Props = {
   coins: number | null;
   loading: boolean;
   fetchError: string | null;
-  upcomingMatches: DbMatchRow[];
-  pastMatches: DbMatchRow[];
+  matches: DbMatchRow[];
   onExpertClick: (row: DbMatchRow) => void;
 };
 
@@ -60,14 +59,32 @@ export default function MatchesSheet({
   coins,
   loading,
   fetchError,
-  upcomingMatches,
-  pastMatches,
+  matches,
   onExpertClick,
 }: Props) {
   const [innerTab, setInnerTab] = useState<InnerTab>("schedule");
   const [gridOpen, setGridOpen] = useState(false);
 
-  const scheduleRows = useMemo(() => upcomingMatches.slice(0, 3), [upcomingMatches]);
+  const scheduleRows = useMemo(() => {
+    const upcoming = matches
+      .filter((m) => m.status === "upcoming")
+      .sort(
+        (a, b) =>
+          new Date(a.match_date).getTime() - new Date(b.match_date).getTime(),
+      );
+    return upcoming.slice(0, 3);
+  }, [matches]);
+
+  const finishedRows = useMemo(
+    () =>
+      matches
+        .filter((m) => m.status === "finished")
+        .sort(
+          (a, b) =>
+            new Date(b.match_date).getTime() - new Date(a.match_date).getTime(),
+        ),
+    [matches],
+  );
 
   const handleClose = useCallback(() => {
     setGridOpen(false);
@@ -228,7 +245,7 @@ export default function MatchesSheet({
                             />
                           ))
                         )
-                      ) : pastMatches.length === 0 ? (
+                      ) : finishedRows.length === 0 ? (
                         <motion.p
                           initial={{ opacity: 0 }}
                           animate={{ opacity: 1 }}
@@ -237,7 +254,7 @@ export default function MatchesSheet({
                           {listEmptyMessage}
                         </motion.p>
                       ) : (
-                        pastMatches.map((row, i) => (
+                        finishedRows.map((row, i) => (
                           <FinishedMatchResultCard key={row.id} row={row} index={i} />
                         ))
                       )}

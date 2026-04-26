@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 
 type Props = {
   /** ISO date string */
@@ -58,15 +58,21 @@ export default function MatchScheduleCountdown({ target }: Props) {
   ];
 
   return (
-    <div className="grid min-w-0 grid-cols-4 gap-1.5 sm:gap-2">
-      {cells.map((c) => (
-        <div
-          key={c.label}
-          className="flex h-14 w-14 min-w-0 flex-col items-center justify-center rounded-lg bg-white/10 p-2 backdrop-blur-sm"
-        >
-          <span className="text-xl font-bold tabular-nums text-white">{c.value}</span>
-          <span className="text-[10px] font-medium uppercase text-white/50">{c.label}</span>
-        </div>
+    <div className="flex min-w-0 flex-wrap items-end justify-center gap-0.5 sm:gap-1">
+      {cells.map((c, i) => (
+        <Fragment key={c.label}>
+          {i > 0 ? (
+            <span aria-hidden className="text-white/30 text-xl font-bold pb-4">
+              :
+            </span>
+          ) : null}
+          <div className="flex h-14 w-12 flex-col items-center justify-center rounded-xl border border-white/10 bg-white/5 backdrop-blur-md shadow-lg">
+            <span className="text-xl font-black text-white tabular-nums">{c.value}</span>
+            <span className="mt-0.5 text-[9px] uppercase tracking-widest text-white/50">
+              {c.label}
+            </span>
+          </div>
+        </Fragment>
       ))}
     </div>
   );

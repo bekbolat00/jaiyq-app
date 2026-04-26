@@ -50,7 +50,7 @@ export default function UpcomingMatchScheduleCard({
         <div className="flex min-w-0 flex-col items-center gap-2">
           <TeamBadge team={left} size={logoSize} />
         </div>
-        <div className="w-[min(100%,11.5rem)] shrink px-0.5 sm:w-[13rem]">
+        <div className="min-w-0 shrink px-0.5 sm:max-w-[16rem]">
           <MatchScheduleCountdown target={row.match_date} />
         </div>
         <div className="flex min-w-0 flex-col items-center gap-2">

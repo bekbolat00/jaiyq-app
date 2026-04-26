@@ -7,7 +7,7 @@ import ExpertPredictorSheet from "@/app/components/ExpertPredictorSheet";
 import MainTabPanel from "@/app/components/MainTabPanel";
 import MatchesSheet from "@/app/components/MatchesSheet";
 import StandingsPanel from "@/app/components/StandingsPanel";
-import { useAppMatches } from "@/app/hooks/useAppMatches";
+import type { UseAppMatchesResult } from "@/app/hooks/useAppMatches";
 import { dbMatchRowToExpertContext } from "@/lib/matches/mapDbMatch";
 import type { DbMatchRow, ExpertMatchContext } from "@/lib/types";
 
@@ -35,15 +35,16 @@ const panelVariants = {
 
 type Props = {
   coins: number | null;
+  matchesState: UseAppMatchesResult;
 };
 
-export default function HomeSectionTabs({ coins }: Props) {
+export default function HomeSectionTabs({ coins, matchesState }: Props) {
   const [tab, setTab] = useState<TabId>("main");
   const [matchesOpen, setMatchesOpen] = useState(false);
   const [expertOpen, setExpertOpen] = useState(false);
   const [expertContext, setExpertContext] = useState<ExpertMatchContext | null>(null);
 
-  const { loading, error, upcomingMatches, pastMatches, refetch } = useAppMatches();
+  const { loading, error, upcomingMatches, pastMatches, refetch } = matchesState;
 
   const openExpert = useCallback((row: DbMatchRow) => {
     setExpertContext(dbMatchRowToExpertContext(row));
@@ -82,8 +83,7 @@ export default function HomeSectionTabs({ coins }: Props) {
         coins={coins}
         loading={loading}
         fetchError={error}
-        upcomingMatches={upcomingMatches}
-        pastMatches={pastMatches}
+        matches={[...upcomingMatches, ...pastMatches]}
         onExpertClick={openExpert}
       />
 

@@ -7,11 +7,23 @@ import HomeSectionTabs from "@/app/components/HomeSectionTabs";
 import NotificationsSheet from "@/app/components/NotificationsSheet";
 import PromoCarousel from "@/app/components/PromoCarousel";
 import TabEnterMotion from "@/app/components/TabEnterMotion";
+import { useAppMatches } from "@/app/hooks/useAppMatches";
 import { useDailyZCoins } from "@/app/hooks/useDailyZCoins";
 import { NOTIFICATIONS } from "@/lib/data/mock";
 
 export default function HomePageContent() {
   const wallet = useDailyZCoins();
+  const matchesState = useAppMatches();
+
+  const heroMatch = useMemo(() => {
+    const upcoming = matchesState.upcomingMatches.filter((m) => m.status === "upcoming");
+    return (
+      [...upcoming].sort(
+        (a, b) =>
+          new Date(a.match_date).getTime() - new Date(b.match_date).getTime(),
+      )[0] ?? null
+    );
+  }, [matchesState.upcomingMatches]);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const hasUnreadNotifications = useMemo(
     () => NOTIFICATIONS.some((n) => n.isNew),
@@ -46,9 +58,9 @@ export default function HomePageContent() {
         </p>
       </header>
 
-      <PromoCarousel />
+      <PromoCarousel heroMatch={heroMatch} matchesLoading={matchesState.loading} />
 
-      <HomeSectionTabs coins={wallet.coins} />
+      <HomeSectionTabs coins={wallet.coins} matchesState={matchesState} />
     </TabEnterMotion>
   );
 }

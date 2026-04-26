@@ -1,17 +1,23 @@
-const MATCH_TOUR_CARD = {
-  href: "https://tickets.example.kz",
-  title: "Матч тура",
-  subtitle: "Жайык — билеты и трибуны",
-  cta: "Купить билет",
-} as const;
+import type { DbMatchRow } from "@/lib/types";
+
+const FALLBACK_TICKET_HREF = "https://tickets.example.kz" as const;
+
+type Props = {
+  heroMatch: DbMatchRow | null;
+  matchesLoading?: boolean;
+};
+
+function heroTitle(row: DbMatchRow): string {
+  return row.is_home ? `Жайык — ${row.opponent}` : `${row.opponent} — Жайык`;
+}
 
 function CardInner({
+  eyebrow,
   title,
-  subtitle,
   cta,
 }: {
+  eyebrow: string;
   title: string;
-  subtitle: string;
   cta: string;
 }) {
   return (
@@ -22,7 +28,7 @@ function CardInner({
           "linear-gradient(165deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 45%, rgba(255,255,255,0.03) 100%), #020408",
       }}
     >
-      <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/45">{subtitle}</p>
+      <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/45">{eyebrow}</p>
       <h3 className="mt-1.5 text-balance text-lg font-black uppercase leading-tight tracking-wide text-white/95">
         {title}
       </h3>
@@ -44,12 +50,48 @@ function CardInner({
   );
 }
 
-/** Один главный баннер «Матч тура» на главной. */
-export default function PromoCarousel() {
+/** Главный баннер «Матч тура»: один ближайший предстоящий матч из Supabase. */
+export default function PromoCarousel({ heroMatch, matchesLoading }: Props) {
+  const ticketHref =
+    heroMatch?.ticket_url?.trim() && heroMatch.ticket_url.trim().length > 0
+      ? heroMatch.ticket_url.trim()
+      : FALLBACK_TICKET_HREF;
+
+  if (matchesLoading) {
+    return (
+      <div className="-mx-4 px-4">
+        <div
+          className="relative min-h-[168px] w-full animate-pulse overflow-hidden rounded-3xl border border-white/[0.08] bg-[#020408]"
+          aria-busy
+          aria-label="Загрузка матча тура"
+        />
+      </div>
+    );
+  }
+
+  if (!heroMatch) {
+    return (
+      <div className="-mx-4 px-4">
+        <article
+          className="relative min-h-[168px] w-full overflow-hidden rounded-3xl border border-white/[0.08] bg-[#020408] shadow-[0_24px_70px_-28px_rgba(0,0,0,0.92)]"
+          style={{ backgroundColor: "#020408" }}
+        >
+          <div className="relative p-1.5">
+            <CardInner
+              eyebrow="Матч тура"
+              title="Нет запланированных матчей"
+              cta="Скоро здесь появится дата"
+            />
+          </div>
+        </article>
+      </div>
+    );
+  }
+
   return (
     <div className="-mx-4 px-4">
       <a
-        href={MATCH_TOUR_CARD.href}
+        href={ticketHref}
         target="_blank"
         rel="noopener noreferrer"
         className="block transition-transform active:scale-[0.99]"
@@ -77,9 +119,9 @@ export default function PromoCarousel() {
           />
           <div className="relative p-1.5">
             <CardInner
-              title={MATCH_TOUR_CARD.title}
-              subtitle={MATCH_TOUR_CARD.subtitle}
-              cta={MATCH_TOUR_CARD.cta}
+              eyebrow="Матч тура"
+              title={heroTitle(heroMatch)}
+              cta="Купить билет"
             />
           </div>
         </article>

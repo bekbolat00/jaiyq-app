@@ -72,7 +72,7 @@ export default function MusicToggle() {
         : "bg-white/20";
 
   return (
-    <>
+    <div className="shrink-0">
       <button
         type="button"
         onClick={handleClick}
@@ -105,6 +105,6 @@ export default function MusicToggle() {
         playsInline
         style={{ display: "none" }}
       />
-    </>
+    </div>
   );
 }

@@ -3,13 +3,11 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useCallback, useState } from "react";
 import { HOME_STANDINGS } from "@/lib/data/mock";
-import ExpertPredictorSheet from "@/app/components/ExpertPredictorSheet";
 import MainTabPanel from "@/app/components/MainTabPanel";
 import MatchesSheet from "@/app/components/MatchesSheet";
 import StandingsPanel from "@/app/components/StandingsPanel";
 import type { UseAppMatchesResult } from "@/app/hooks/useAppMatches";
-import { dbMatchRowToExpertContext } from "@/lib/matches/mapDbMatch";
-import type { DbMatchRow, ExpertMatchContext } from "@/lib/types";
+import type { DbMatchRow } from "@/lib/types";
 
 const TABS = [
   { id: "main" as const, label: "ГЛАВНАЯ" },
@@ -36,25 +34,14 @@ const panelVariants = {
 type Props = {
   coins: number | null;
   matchesState: UseAppMatchesResult;
+  onExpertClick: (row: DbMatchRow) => void;
 };
 
-export default function HomeSectionTabs({ coins, matchesState }: Props) {
+export default function HomeSectionTabs({ coins, matchesState, onExpertClick }: Props) {
   const [tab, setTab] = useState<TabId>("main");
   const [matchesOpen, setMatchesOpen] = useState(false);
-  const [expertOpen, setExpertOpen] = useState(false);
-  const [expertContext, setExpertContext] = useState<ExpertMatchContext | null>(null);
 
-  const { loading, error, upcomingMatches, pastMatches, refetch } = matchesState;
-
-  const openExpert = useCallback((row: DbMatchRow) => {
-    setExpertContext(dbMatchRowToExpertContext(row));
-    setExpertOpen(true);
-  }, []);
-
-  const closeExpert = useCallback(() => {
-    setExpertOpen(false);
-    setExpertContext(null);
-  }, []);
+  const { loading, error, upcomingMatches, pastMatches } = matchesState;
 
   function openMatches() {
     setTab("calendar");
@@ -68,15 +55,6 @@ export default function HomeSectionTabs({ coins, matchesState }: Props) {
 
   return (
     <div className="space-y-4">
-      <ExpertPredictorSheet
-        open={expertOpen}
-        expertMatch={expertContext}
-        onClose={closeExpert}
-        onCompleted={() => {
-          void refetch();
-        }}
-      />
-
       <MatchesSheet
         open={matchesOpen}
         onClose={closeMatches}
@@ -84,7 +62,7 @@ export default function HomeSectionTabs({ coins, matchesState }: Props) {
         loading={loading}
         fetchError={error}
         matches={[...upcomingMatches, ...pastMatches]}
-        onExpertClick={openExpert}
+        onExpertClick={onExpertClick}
       />
 
       <div

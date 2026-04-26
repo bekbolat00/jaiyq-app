@@ -4,8 +4,14 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { TEAM_ZHAIYQ } from "@/lib/constants/zhaiyq";
 import { dbMatchRowToMatch } from "@/lib/matches/mapDbMatch";
-import type { DbMatchRow } from "@/lib/types";
+import type { DbMatchRow, Team } from "@/lib/types";
+
+function pickTeamLogoUrl(team: Team & { logo?: string }): string {
+  const raw = (team.logo ?? team.logoUrl ?? "").trim();
+  return raw;
+}
 
 type Props = {
   open: boolean;
@@ -205,7 +211,11 @@ export default function CalendarGridSheet({ open, onClose }: Props) {
                     const opponentLogoUrl = match
                       ? (() => {
                           const m = dbMatchRowToMatch(match);
-                          return match.is_home ? m.away.logoUrl : m.home.logoUrl;
+                          const zhaiyqHome =
+                            m.home.id === TEAM_ZHAIYQ.id ||
+                            m.home.fullName === TEAM_ZHAIYQ.fullName ||
+                            m.home.shortName === TEAM_ZHAIYQ.shortName;
+                          return zhaiyqHome ? pickTeamLogoUrl(m.away) : pickTeamLogoUrl(m.home);
                         })()
                       : "";
                     const hasLogo = Boolean(opponentLogoUrl?.trim());
@@ -233,11 +243,11 @@ export default function CalendarGridSheet({ open, onClose }: Props) {
                           </span>
                         ) : null}
                         {hasLogo ? (
-                          // eslint-disable-next-line @next/next/no-img-element -- external logo URLs
+                          // eslint-disable-next-line @next/next/no-img-element -- external / local logo URLs
                           <img
                             src={opponentLogoUrl}
                             alt=""
-                            className="pointer-events-none absolute left-1/2 top-[42%] z-[1] h-9 w-9 -translate-x-1/2 -translate-y-1/2 rounded-full object-contain bg-white/10 p-0.5 shadow-[0_0_8px_rgba(0,240,255,0.4)]"
+                            className="pointer-events-none mt-1 w-7 h-7 object-contain"
                           />
                         ) : null}
                       </button>

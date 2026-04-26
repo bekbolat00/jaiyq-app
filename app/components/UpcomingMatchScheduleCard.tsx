@@ -46,14 +46,14 @@ export default function UpcomingMatchScheduleCard({
         {row.competition}
       </p>
 
-      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 sm:gap-4">
-        <div className="flex min-w-0 flex-col items-center gap-2">
+      <div className="flex w-full items-center justify-between gap-4 px-4 sm:gap-6 sm:px-6">
+        <div className="flex min-w-0 shrink-0 flex-col items-center gap-2">
           <TeamBadge team={left} size={logoSize} />
         </div>
-        <div className="min-w-0 shrink px-0.5 sm:max-w-[16rem]">
+        <div className="flex min-w-0 shrink-0 justify-center px-2 sm:max-w-[16rem]">
           <MatchScheduleCountdown target={row.match_date} />
         </div>
-        <div className="flex min-w-0 flex-col items-center gap-2">
+        <div className="flex min-w-0 shrink-0 flex-col items-center gap-2">
           <TeamBadge team={right} size={logoSize} />
         </div>
       </div>

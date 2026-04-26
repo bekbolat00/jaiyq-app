@@ -4,12 +4,8 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-
-type MatchRow = {
-  match_date: string;
-  opponent: string;
-  logo_url: string | null;
-};
+import { dbMatchRowToMatch } from "@/lib/matches/mapDbMatch";
+import type { DbMatchRow } from "@/lib/types";
 
 type Props = {
   open: boolean;
@@ -66,14 +62,14 @@ function buildGridCells(year: number, monthIndex: number) {
 export default function CalendarGridSheet({ open, onClose }: Props) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedYmd, setSelectedYmd] = useState<string | null>(null);
-  const [matches, setMatches] = useState<MatchRow[]>([]);
+  const [matches, setMatches] = useState<DbMatchRow[]>([]);
 
   const y = currentDate.getFullYear();
   const m = currentDate.getMonth();
   const titleText = `${MONTHS_RU[m]} ${y} г.`;
 
   const matchByYmd = useMemo(() => {
-    const map = new Map<string, MatchRow>();
+    const map = new Map<string, DbMatchRow>();
     for (const row of matches) {
       if (row.match_date) map.set(row.match_date, row);
     }
@@ -85,7 +81,7 @@ export default function CalendarGridSheet({ open, onClose }: Props) {
     (async () => {
       const { data } = await supabase.from("matches").select("*");
       if (cancelled || !data) return;
-      setMatches(data as MatchRow[]);
+      setMatches(data as DbMatchRow[]);
     })();
     return () => {
       cancelled = true;
@@ -206,12 +202,19 @@ export default function CalendarGridSheet({ open, onClose }: Props) {
                     const ymd = toYmd(y, m, day);
                     const match = matchByYmd.get(ymd) ?? null;
                     const selected = selectedYmd === ymd;
+                    const opponentLogoUrl = match
+                      ? (() => {
+                          const m = dbMatchRowToMatch(match);
+                          return match.is_home ? m.away.logoUrl : m.home.logoUrl;
+                        })()
+                      : "";
+                    const hasLogo = Boolean(opponentLogoUrl?.trim());
                     return (
                       <button
                         key={ymd}
                         type="button"
                         onClick={() => setSelectedYmd(ymd)}
-                        className={`relative flex min-h-[60px] flex-col items-center justify-center rounded-2xl border px-0.5 py-1.5 transition-[background,border-color,box-shadow] ${
+                        className={`relative flex min-h-[60px] flex-col items-center justify-center overflow-hidden rounded-2xl border px-0.5 py-1.5 transition-[background,border-color,box-shadow] ${
                           selected
                             ? "border-accent bg-accent/15 shadow-[0_0_24px_rgba(0,240,255,0.22)]"
                             : "border-white/[0.08] bg-white/[0.03] hover:border-white/12 hover:bg-white/[0.05]"
@@ -221,23 +224,22 @@ export default function CalendarGridSheet({ open, onClose }: Props) {
                           match ? `${day} ${match.opponent} — матч` : `${day} число, без матча`
                         }
                       >
-                        {match?.logo_url ? (
-                          // Dynamic Supabase URLs; next/image domains vary by project.
-                          // eslint-disable-next-line @next/next/no-img-element -- external logo URLs
-                          <img
-                            src={match.logo_url}
-                            alt=""
-                            className="h-8 w-8 rounded-full object-contain bg-white/10 p-0.5 shadow-[0_0_8px_rgba(0,240,255,0.4)]"
-                          />
-                        ) : match ? (
-                          <span className="text-center text-[10px] font-semibold leading-tight text-white/70 line-clamp-2">
+                        <span className="relative z-0 text-[16px] font-semibold tabular-nums text-white/45">
+                          {day}
+                        </span>
+                        {match && !hasLogo ? (
+                          <span className="relative z-0 mt-0.5 px-0.5 text-center text-[9px] font-semibold leading-tight text-white/70 line-clamp-2">
                             {match.opponent}
                           </span>
-                        ) : (
-                          <span className="text-[16px] font-semibold tabular-nums text-white/45">
-                            {day}
-                          </span>
-                        )}
+                        ) : null}
+                        {hasLogo ? (
+                          // eslint-disable-next-line @next/next/no-img-element -- external logo URLs
+                          <img
+                            src={opponentLogoUrl}
+                            alt=""
+                            className="pointer-events-none absolute left-1/2 top-[42%] z-[1] h-9 w-9 -translate-x-1/2 -translate-y-1/2 rounded-full object-contain bg-white/10 p-0.5 shadow-[0_0_8px_rgba(0,240,255,0.4)]"
+                          />
+                        ) : null}
                       </button>
                     );
                   })}

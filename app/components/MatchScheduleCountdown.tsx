@@ -62,14 +62,10 @@ export default function MatchScheduleCountdown({ target }: Props) {
       {cells.map((c) => (
         <div
           key={c.label}
-          className="flex flex-col items-center justify-center rounded-xl border border-white/[0.1] bg-black/30 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] sm:py-2.5"
+          className="flex h-14 w-14 min-w-0 flex-col items-center justify-center rounded-lg bg-white/10 p-2 backdrop-blur-sm"
         >
-          <span className="font-mono text-base font-black tabular-nums text-white sm:text-lg">
-            {c.value}
-          </span>
-          <span className="mt-0.5 text-[8px] font-black uppercase tracking-[0.12em] text-white/45 sm:text-[9px]">
-            {c.label}
-          </span>
+          <span className="text-xl font-bold tabular-nums text-white">{c.value}</span>
+          <span className="text-[10px] font-medium uppercase text-white/50">{c.label}</span>
         </div>
       ))}
     </div>

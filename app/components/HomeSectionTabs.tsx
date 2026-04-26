@@ -139,14 +139,7 @@ export default function HomeSectionTabs({ coins }: Props) {
             exit="exit"
             className="flex flex-col gap-6"
           >
-            <MainTabPanel
-              onViewAllMatches={openMatches}
-              onExpertClick={openExpert}
-              loading={loading}
-              fetchError={error}
-              upcomingMatches={upcomingMatches}
-              pastMatches={pastMatches}
-            />
+            <MainTabPanel onViewAllMatches={openMatches} pastMatches={pastMatches} />
           </motion.div>
         ) : null}
         {tab === "table" && !matchesOpen ? (

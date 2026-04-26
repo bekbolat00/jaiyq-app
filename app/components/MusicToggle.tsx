@@ -40,8 +40,6 @@ export default function MusicToggle() {
       return;
     }
 
-    if (audioState !== "ready") return;
-
     if (audio.paused) {
       void audio
         .play()
@@ -58,13 +56,11 @@ export default function MusicToggle() {
   }, [audioState]);
 
   const ariaLabel =
-    audioState === "loading"
-      ? "Загрузка музыки"
-      : audioState === "error"
-        ? "Ошибка загрузки. Нажмите, чтобы повторить"
-        : isPlaying
-          ? "Выключить музыку"
-          : "Включить музыку";
+    audioState === "error"
+      ? "Ошибка загрузки. Нажмите, чтобы повторить"
+      : isPlaying
+        ? "Выключить музыку"
+        : "Включить музыку";
 
   const trackClass =
     audioState === "error"
@@ -79,14 +75,13 @@ export default function MusicToggle() {
     <>
       <button
         type="button"
-        disabled={audioState === "loading"}
         onClick={handleClick}
-        aria-pressed={audioState === "ready" ? isPlaying : undefined}
+        aria-pressed={audioState !== "error" ? isPlaying : undefined}
         aria-busy={audioState === "loading"}
         aria-label={ariaLabel}
         className={`relative h-6 w-12 shrink-0 overflow-hidden rounded-full border-0 p-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
-          audioState === "loading" ? "cursor-not-allowed opacity-50" : ""
-        } ${audioState === "error" ? "cursor-pointer" : ""}`}
+          audioState === "error" ? "cursor-pointer" : ""
+        }`}
       >
         <div className={`absolute inset-0 ${trackClass}`} />
         <motion.span

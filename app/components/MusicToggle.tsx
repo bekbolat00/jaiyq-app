@@ -14,18 +14,20 @@ export default function MusicToggle() {
     const audio = audioRef.current;
     if (!audio) return;
 
-    const handleReady = () => setAudioState("ready");
+    const markReady = () => setAudioState("ready");
     const handleError = () => {
       setIsPlaying(false);
       setAudioState("error");
     };
 
-    audio.addEventListener("canplay", handleReady);
+    audio.addEventListener("canplay", markReady);
+    audio.addEventListener("loadeddata", markReady);
     audio.addEventListener("error", handleError);
     if (audio.readyState >= 2) setAudioState("ready");
 
     return () => {
-      audio.removeEventListener("canplay", handleReady);
+      audio.removeEventListener("canplay", markReady);
+      audio.removeEventListener("loadeddata", markReady);
       audio.removeEventListener("error", handleError);
     };
   }, []);

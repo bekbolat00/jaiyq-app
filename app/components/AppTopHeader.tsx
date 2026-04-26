@@ -1,6 +1,5 @@
 "use client";
 
-import MusicToggle from "@/app/components/MusicToggle";
 import NotificationBellButton from "@/app/components/NotificationBellButton";
 
 type Props = {
@@ -37,8 +36,6 @@ export default function AppTopHeader({
             🪙
           </span>
         </div>
-
-        <MusicToggle />
 
         <NotificationBellButton
           onClick={onNotificationsClick}

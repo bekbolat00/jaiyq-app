@@ -14,7 +14,7 @@ export default function ToggleSwitch({
   description,
 }: Props) {
   return (
-    <label className="glass flex cursor-pointer items-center justify-between gap-4 rounded-2xl px-4 py-3">
+    <label className="glass-premium flex cursor-pointer items-center justify-between gap-4 rounded-2xl px-4 py-3">
       <span className="flex-1">
         <span className="block text-[14px] font-medium text-foreground">
           {label}

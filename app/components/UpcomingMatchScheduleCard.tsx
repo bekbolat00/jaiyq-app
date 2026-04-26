@@ -1,7 +1,6 @@
 "use client";
 
 import { motion } from "framer-motion";
-import TeamBadge from "@/app/components/TeamBadge";
 import MatchScheduleCountdown from "@/app/components/MatchScheduleCountdown";
 import { TEAM_ZHAIYQ } from "@/lib/constants/zhaiyq";
 import type { DbMatchRow } from "@/lib/types";
@@ -21,14 +20,12 @@ type Props = {
   row: DbMatchRow;
   index?: number;
   onExpertClick: () => void;
-  logoSize?: "lg" | "xl";
 };
 
 export default function UpcomingMatchScheduleCard({
   row,
   index = 0,
   onExpertClick,
-  logoSize = "xl",
 }: Props) {
   const opp = opponentTeam(row);
   const left = row.is_home ? TEAM_ZHAIYQ : opp;
@@ -46,13 +43,23 @@ export default function UpcomingMatchScheduleCard({
         {row.competition}
       </p>
 
-      <div className="flex items-center justify-between w-full px-4">
-        <div className="flex min-w-0 shrink-0 flex-col items-center gap-2">
-          <TeamBadge team={left} size={logoSize} />
+      <div className="flex items-center justify-between w-full px-2">
+        <div className="flex-1 flex justify-start items-center">
+          {/* eslint-disable-next-line @next/next/no-img-element -- local / remote logo URLs */}
+          <img
+            src={left.logoUrl ?? ""}
+            alt=""
+            className="w-10 h-10 sm:w-12 sm:h-12 object-contain shrink-0"
+          />
         </div>
         <MatchScheduleCountdown target={row.match_date} />
-        <div className="flex min-w-0 shrink-0 flex-col items-center gap-2">
-          <TeamBadge team={right} size={logoSize} />
+        <div className="flex-1 flex justify-end items-center">
+          {/* eslint-disable-next-line @next/next/no-img-element -- local / remote logo URLs */}
+          <img
+            src={right.logoUrl ?? ""}
+            alt=""
+            className="w-10 h-10 sm:w-12 sm:h-12 object-contain shrink-0"
+          />
         </div>
       </div>
 

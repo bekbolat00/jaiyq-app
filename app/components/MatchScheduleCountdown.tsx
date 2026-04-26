@@ -44,7 +44,7 @@ export default function MatchScheduleCountdown({ target }: Props) {
 
   if (segments.done) {
     return (
-      <div className="rounded-xl border border-accent/30 bg-accent/10 px-3 py-2 text-center text-[10px] font-bold uppercase tracking-wider text-accent">
+      <div className="shrink-0 rounded-xl border border-accent/30 bg-accent/10 px-3 py-2 text-center text-[10px] font-bold uppercase tracking-wider text-accent">
         Скоро старт
       </div>
     );
@@ -58,17 +58,17 @@ export default function MatchScheduleCountdown({ target }: Props) {
   ];
 
   return (
-    <div className="flex items-center gap-1.5">
+    <div className="flex items-center gap-1 shrink-0">
       {cells.map((c, i) => (
         <Fragment key={c.label}>
           {i > 0 ? (
-            <span aria-hidden className="text-white/30 font-bold mb-2 text-lg">
+            <span aria-hidden className="text-white/30 font-bold text-xs mb-3 px-0.5">
               :
             </span>
           ) : null}
-          <div className="flex flex-col items-center justify-center w-10 h-12 bg-white/10 border border-white/5 rounded-lg backdrop-blur-md">
-            <span className="text-lg font-bold text-white">{c.value}</span>
-            <span className="text-[8px] uppercase text-white/50">{c.label}</span>
+          <div className="flex flex-col items-center justify-center w-[36px] h-[46px] bg-white/10 border border-white/5 rounded-md backdrop-blur-md">
+            <span className="text-sm font-bold text-white">{c.value}</span>
+            <span className="text-[7px] uppercase text-white/50 tracking-wider">{c.label}</span>
           </div>
         </Fragment>
       ))}

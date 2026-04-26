@@ -69,7 +69,7 @@ export default function ProfilePage() {
     if (typeof window === "undefined") return;
     const savedAvatar = localStorage.getItem("user_avatar");
     if (savedAvatar && !savedAvatar.startsWith("blob:")) {
-      setAvatarUrl(savedAvatar);
+      queueMicrotask(() => setAvatarUrl(savedAvatar));
     }
   }, []);
 

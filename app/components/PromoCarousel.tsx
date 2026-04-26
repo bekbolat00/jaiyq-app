@@ -1,11 +1,10 @@
 import Link from "next/link";
-import { NEXT_MATCH } from "@/lib/data/mock";
 
 const CARDS = [
   {
-    href: NEXT_MATCH.ticketUrl ?? "https://tickets.example.kz/zhaiyq-kairat",
+    href: "https://tickets.example.kz",
     title: "Матч тура",
-    subtitle: "Жайык — Кайрат",
+    subtitle: "Жайык — билеты и трибуны",
     cta: "Купить билет",
     external: true,
   },

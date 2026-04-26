@@ -1,11 +1,15 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { useState } from "react";
-import { HOME_CALENDAR_MATCHES, HOME_STANDINGS } from "@/lib/data/mock";
+import { useCallback, useState } from "react";
+import { HOME_STANDINGS } from "@/lib/data/mock";
+import ExpertPredictorSheet from "@/app/components/ExpertPredictorSheet";
 import MainTabPanel from "@/app/components/MainTabPanel";
-import MatchCalendarPanel from "@/app/components/MatchCalendarPanel";
+import MatchesSheet from "@/app/components/MatchesSheet";
 import StandingsPanel from "@/app/components/StandingsPanel";
+import { useAppMatches } from "@/app/hooks/useAppMatches";
+import { dbMatchRowToExpertContext } from "@/lib/matches/mapDbMatch";
+import type { DbMatchRow, ExpertMatchContext } from "@/lib/types";
 
 const TABS = [
   { id: "main" as const, label: "ГЛАВНАЯ" },
@@ -29,25 +33,84 @@ const panelVariants = {
   },
 };
 
-export default function HomeSectionTabs() {
+type Props = {
+  coins: number | null;
+};
+
+export default function HomeSectionTabs({ coins }: Props) {
   const [tab, setTab] = useState<TabId>("main");
+  const [matchesOpen, setMatchesOpen] = useState(false);
+  const [expertOpen, setExpertOpen] = useState(false);
+  const [expertContext, setExpertContext] = useState<ExpertMatchContext | null>(null);
+
+  const { loading, error, upcomingMatches, pastMatches, refetch } = useAppMatches();
+
+  const openExpert = useCallback((row: DbMatchRow) => {
+    setExpertContext(dbMatchRowToExpertContext(row));
+    setExpertOpen(true);
+  }, []);
+
+  const closeExpert = useCallback(() => {
+    setExpertOpen(false);
+    setExpertContext(null);
+  }, []);
+
+  function openMatches() {
+    setTab("calendar");
+    setMatchesOpen(true);
+  }
+
+  function closeMatches() {
+    setMatchesOpen(false);
+    setTab("main");
+  }
 
   return (
     <div className="space-y-4">
+      <ExpertPredictorSheet
+        open={expertOpen}
+        expertMatch={expertContext}
+        onClose={closeExpert}
+        onCompleted={() => {
+          void refetch();
+        }}
+      />
+
+      <MatchesSheet
+        open={matchesOpen}
+        onClose={closeMatches}
+        coins={coins}
+        loading={loading}
+        fetchError={error}
+        upcomingMatches={upcomingMatches}
+        pastMatches={pastMatches}
+        onExpertClick={openExpert}
+      />
+
       <div
         className="glass-premium flex rounded-2xl p-1"
         role="tablist"
         aria-label="Главная, календарь и турнирная таблица"
       >
         {TABS.map((t) => {
-          const active = tab === t.id;
+          const active =
+            (t.id === "main" && tab === "main" && !matchesOpen) ||
+            (t.id === "table" && tab === "table" && !matchesOpen) ||
+            (t.id === "calendar" && matchesOpen);
           return (
             <button
               key={t.id}
               type="button"
               role="tab"
               aria-selected={active}
-              onClick={() => setTab(t.id)}
+              onClick={() => {
+                if (t.id === "calendar") {
+                  openMatches();
+                  return;
+                }
+                setMatchesOpen(false);
+                setTab(t.id);
+              }}
               className={`relative z-0 flex-1 rounded-xl py-2.5 text-center text-[10px] font-bold uppercase tracking-wide transition-colors sm:text-[11px] ${
                 active ? "text-[#020408]" : "text-muted hover:text-foreground/80"
               }`}
@@ -66,7 +129,7 @@ export default function HomeSectionTabs() {
       </div>
 
       <AnimatePresence mode="wait">
-        {tab === "main" ? (
+        {tab === "main" && !matchesOpen ? (
           <motion.div
             key="main"
             role="tabpanel"
@@ -76,22 +139,17 @@ export default function HomeSectionTabs() {
             exit="exit"
             className="flex flex-col gap-6"
           >
-            <MainTabPanel onViewAllMatches={() => setTab("calendar")} />
+            <MainTabPanel
+              onViewAllMatches={openMatches}
+              onExpertClick={openExpert}
+              loading={loading}
+              fetchError={error}
+              upcomingMatches={upcomingMatches}
+              pastMatches={pastMatches}
+            />
           </motion.div>
         ) : null}
-        {tab === "calendar" ? (
-          <motion.div
-            key="calendar"
-            role="tabpanel"
-            variants={panelVariants}
-            initial="initial"
-            animate="animate"
-            exit="exit"
-          >
-            <MatchCalendarPanel matches={HOME_CALENDAR_MATCHES} />
-          </motion.div>
-        ) : null}
-        {tab === "table" ? (
+        {tab === "table" && !matchesOpen ? (
           <motion.div
             key="table"
             role="tabpanel"

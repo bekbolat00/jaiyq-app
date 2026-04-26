@@ -38,6 +38,53 @@ export type Match = {
   finalScore?: { home: number; away: number };
 };
 
+export type CalendarTabMatch = {
+  id: string;
+  date: string; // ISO строка — используется для фильтрации по месяцу/году
+  kickoffAt: string; // ISO строка — используется для таймера обратного отсчёта
+  /** Лига / турнир (как `Match.competition` в NextMatchCard / MatchCalendarPanel). */
+  competition: string;
+  /** Стадион (как `Match.venue`). */
+  venue: string;
+  homeTeam: string; // плоское поле — используется там где раньше было m.homeTeam
+  awayTeam: string;
+  homeLogo: string; // плоское поле — используется там где раньше было m.homeLogo
+  awayLogo: string;
+  /** Сторона хозяев: полная форма `Team` + счёт (как `Match.home` для TeamBadge / shortName). */
+  home: Team & { score: number | null };
+  away: Team & { score: number | null };
+  homeScore: number | null;
+  awayScore: number | null;
+  ticketUrl?: string; // опциональное — ссылка на билеты для предстоящих матчей
+  status: "upcoming" | "finished";
+  /** Итог для прошедших матчей (как у типа `Match`). */
+  finalScore?: { home: number; away: number };
+};
+
+/** Строка `public.matches` из Supabase (основные поля UI). */
+export type DbMatchRow = {
+  id: string;
+  match_date: string;
+  opponent: string;
+  logo_url: string | null;
+  is_home: boolean;
+  zhaiyq_score: number | null;
+  opponent_score: number | null;
+  competition: string;
+  status: "upcoming" | "finished";
+  match_details: string | null;
+  ticket_url?: string | null;
+};
+
+/** Контекст матча для шторки «ZHAIYQ ЭКСПЕРТ». */
+export type ExpertMatchContext = {
+  matchId: string;
+  isHome: boolean;
+  opponentName: string;
+  opponentLogoUrl: string | null;
+  kickoffAt: string;
+};
+
 export type Product = {
   id: string;
   title: string;

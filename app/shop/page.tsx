@@ -5,12 +5,11 @@ import ScreenHeader from "../components/ScreenHeader";
 import TabEnterMotion from "../components/TabEnterMotion";
 import ProductCard from "../components/ProductCard";
 import { PRODUCTS } from "@/lib/data/mock";
-import type { Product } from "@/lib/types";
 
 export default function ShopPage() {
   const [cartCount, setCartCount] = useState(0);
 
-  const handleAdd = (_product: Product) => {
+  const handleAdd = () => {
     setCartCount((c) => c + 1);
   };
 

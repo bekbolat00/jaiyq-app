@@ -4,13 +4,16 @@ import Image from "next/image";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import TeamBadge from "@/app/components/TeamBadge";
-import { NEXT_MATCH, PLAYERS } from "@/lib/data/mock";
+import { PLAYERS } from "@/lib/data/mock";
+import { TEAM_ZHAIYQ } from "@/lib/constants/zhaiyq";
 import { isSupabaseConfigured, supabase } from "@/lib/supabaseClient";
+import type { ExpertMatchContext, Team } from "@/lib/types";
 
 type Props = {
   open: boolean;
   onClose: () => void;
   onCompleted: () => void;
+  expertMatch: ExpertMatchContext | null;
 };
 
 const STORAGE_EXPERT = "expert_v2";
@@ -243,10 +246,26 @@ function Spinner({ className }: { className?: string }) {
   );
 }
 
-export default function ExpertPredictorSheet({ open, onClose, onCompleted }: Props) {
-  const match = NEXT_MATCH;
+function teamsFromExpertContext(ctx: ExpertMatchContext): { home: Team; away: Team } {
+  const opponent: Team = {
+    id: `opponent-${ctx.matchId}`,
+    shortName: ctx.opponentName,
+    fullName: ctx.opponentName,
+    logoUrl: ctx.opponentLogoUrl?.trim() || "",
+  };
+  return {
+    home: ctx.isHome ? TEAM_ZHAIYQ : opponent,
+    away: ctx.isHome ? opponent : TEAM_ZHAIYQ,
+  };
+}
+
+export default function ExpertPredictorSheet({
+  open,
+  onClose,
+  onCompleted,
+  expertMatch,
+}: Props) {
   const onCompletedRef = useRef(onCompleted);
-  onCompletedRef.current = onCompleted;
 
   const [bootPhase, setBootPhase] = useState<BootPhase>("idle");
   const [existingPrediction, setExistingPrediction] = useState<ExistingPredictionRow | null>(
@@ -274,13 +293,19 @@ export default function ExpertPredictorSheet({ open, onClose, onCompleted }: Pro
   }, []);
 
   useEffect(() => {
+    onCompletedRef.current = onCompleted;
+  }, [onCompleted]);
+
+  useEffect(() => {
     if (open) return;
+    /* eslint-disable react-hooks/set-state-in-effect -- сброс UI при закрытии */
     setBootPhase("idle");
     setExistingPrediction(null);
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, [open]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || !expertMatch) return;
     let cancelled = false;
 
     const run = async () => {
@@ -302,7 +327,7 @@ export default function ExpertPredictorSheet({ open, onClose, onCompleted }: Pro
         .select(
           "home_score, away_score, first_goal_player, first_goal_minute, shots_on_target",
         )
-        .eq("match_id", match.id)
+        .eq("match_id", expertMatch.matchId)
         .eq("user_id", userId)
         .maybeSingle();
 
@@ -335,7 +360,7 @@ export default function ExpertPredictorSheet({ open, onClose, onCompleted }: Pro
     return () => {
       cancelled = true;
     };
-  }, [open, match.id, resetForm]);
+  }, [open, expertMatch, resetForm]);
 
   useEffect(() => {
     if (!open) return;
@@ -352,7 +377,7 @@ export default function ExpertPredictorSheet({ open, onClose, onCompleted }: Pro
   }, [open, onClose]);
 
   const handleSubmit = async () => {
-    if (!playerId) return;
+    if (!playerId || !expertMatch) return;
     setSubmitting(true);
     const savedTgId =
       typeof window !== "undefined"
@@ -367,7 +392,7 @@ export default function ExpertPredictorSheet({ open, onClose, onCompleted }: Pro
     const userId =
       savedTgId && savedTgId.trim() ? savedTgId.trim() : "guest";
     const row = {
-      match_id: match.id,
+      match_id: expertMatch.matchId,
       home_score: homeScore,
       away_score: awayScore,
       first_goal_player: playerId,
@@ -413,11 +438,15 @@ export default function ExpertPredictorSheet({ open, onClose, onCompleted }: Pro
 
   /** Первый кадр после открытия ещё с `bootPhase === "idle"` — не мелькаем формой. */
   const showChecking =
-    open && (bootPhase === "idle" || bootPhase === "checking");
+    open && expertMatch && (bootPhase === "idle" || bootPhase === "checking");
+
+  const { home: matchHome, away: matchAway } = expertMatch
+    ? teamsFromExpertContext(expertMatch)
+    : { home: TEAM_ZHAIYQ, away: TEAM_ZHAIYQ };
 
   return (
     <AnimatePresence>
-      {open && (
+      {open && expertMatch && (
         <motion.div
           className="fixed inset-0 z-[60] flex items-end justify-center sm:items-center sm:p-4"
           initial={{ opacity: 0 }}
@@ -648,14 +677,14 @@ export default function ExpertPredictorSheet({ open, onClose, onCompleted }: Pro
                               animate={{ opacity: 1, y: 0 }}
                               transition={{ delay: 0.05, duration: 0.35 }}
                             >
-                              <TeamBadge team={match.home} size="md" />
+                              <TeamBadge team={matchHome} size="md" />
                               <span className="text-center text-sm font-black text-white">
-                                Жайык
+                                {matchHome.shortName}
                               </span>
                               <ScoreAdjuster
                                 value={homeScore}
                                 onChange={setHomeScore}
-                                ariaLabel="Голы Жайык"
+                                ariaLabel={`Голы ${matchHome.shortName}`}
                               />
                             </motion.div>
 
@@ -672,14 +701,14 @@ export default function ExpertPredictorSheet({ open, onClose, onCompleted }: Pro
                               animate={{ opacity: 1, y: 0 }}
                               transition={{ delay: 0.1, duration: 0.35 }}
                             >
-                              <TeamBadge team={match.away} size="md" />
+                              <TeamBadge team={matchAway} size="md" />
                               <span className="text-center text-sm font-black text-white">
-                                Кайрат
+                                {matchAway.shortName}
                               </span>
                               <ScoreAdjuster
                                 value={awayScore}
                                 onChange={setAwayScore}
-                                ariaLabel="Голы Кайрат"
+                                ariaLabel={`Голы ${matchAway.shortName}`}
                               />
                             </motion.div>
                           </div>

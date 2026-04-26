@@ -139,8 +139,10 @@ export default function InviteFriendSheet({ open, match, onClose }: Props) {
 
   useEffect(() => {
     if (!open) {
-      setQuery("");
-      setSelectedFriend(null);
+      queueMicrotask(() => {
+        setQuery("");
+        setSelectedFriend(null);
+      });
     }
   }, [open]);
 

@@ -34,13 +34,14 @@ type UserEconomyRow = {
 };
 
 export function useDailyZCoins() {
-  const [coins, setCoins] = useState<number | null>(null);
+  const [coins, setCoins] = useState<number | null>(() =>
+    isSupabaseConfigured() ? null : 0,
+  );
   const [rewardOpen, setRewardOpen] = useState(false);
   const [rewardStreak, setRewardStreak] = useState(1);
 
   useEffect(() => {
     if (!isSupabaseConfigured()) {
-      setCoins(0);
       return;
     }
 

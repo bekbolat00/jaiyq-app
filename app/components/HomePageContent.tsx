@@ -48,7 +48,7 @@ export default function HomePageContent() {
 
       <PromoCarousel />
 
-      <HomeSectionTabs />
+      <HomeSectionTabs coins={wallet.coins} />
     </TabEnterMotion>
   );
 }

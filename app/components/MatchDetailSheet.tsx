@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import type { MatchCenterViewModel } from "@/lib/data/mock";
 import MatchSpartakStats from "@/app/components/MatchSpartakStats";
 import MatchTimeline from "@/app/components/MatchTimeline";
@@ -46,13 +46,18 @@ type Props = {
 
 export default function MatchDetailSheet({ open, onClose, detail }: Props) {
   const [tab, setTab] = useState<(typeof TABS)[number]["id"]>("overview");
-  const lastDetailRef = useRef<MatchCenterViewModel | null>(null);
-  if (detail) lastDetailRef.current = detail;
-  const resolved = detail ?? lastDetailRef.current;
+  const [lastDetail, setLastDetail] = useState<MatchCenterViewModel | null>(null);
+
+  useEffect(() => {
+    if (!detail) return;
+    queueMicrotask(() => setLastDetail(detail));
+  }, [detail]);
+
+  const resolved = detail ?? lastDetail;
 
   useEffect(() => {
     if (!open) return;
-    setTab("overview");
+    queueMicrotask(() => setTab("overview"));
   }, [open, detail?.home.id, detail?.away.id]);
 
   useEffect(() => {
@@ -89,7 +94,7 @@ export default function MatchDetailSheet({ open, onClose, detail }: Props) {
   return (
     <AnimatePresence
       onExitComplete={() => {
-        lastDetailRef.current = null;
+        setLastDetail(null);
       }}
     >
       {open && (

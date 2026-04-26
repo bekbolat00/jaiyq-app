@@ -1,5 +1,6 @@
 import type {
   AppNotification,
+  CalendarTabMatch,
   Match,
   NewsFeedItem,
   Player,
@@ -9,6 +10,7 @@ import type {
   Ticket,
   UserProfile,
 } from "@/lib/types";
+import { TEAM_ZHAIYQ } from "@/lib/constants/zhaiyq";
 
 /** События на таймлайне лайв-матча (главная). */
 export type LiveTimelineEvent = {
@@ -19,12 +21,7 @@ export type LiveTimelineEvent = {
   side: "home" | "away";
 };
 
-export const TEAM_ZHAIYQ: Team = {
-  id: "zhaiyq",
-  shortName: "ЖАЙЫК",
-  fullName: "ФК Жайык",
-  logoUrl: "/teams/zhaiyq.png",
-};
+export { TEAM_ZHAIYQ };
 
 export const TEAM_KAIRAT_JASTAR: Team = {
   id: "kairat-jastar",
@@ -114,7 +111,7 @@ export const TEAM_EKIBASTUZ: Team = {
   id: "ekibastuz",
   shortName: "ЭКИБАСТУЗ",
   fullName: "ФК Экибастуз",
-  logoUrl: "/teams/shakhter.png",
+  logoUrl: "/teams/batyr.png",
 };
 
 export const TEAM_ARYS: Team = {
@@ -277,68 +274,6 @@ export function getMatchCenterForMatch(m: Match): MatchCenterViewModel {
   };
 }
 
-/** Реальное расписание ФК Жайык на май 2026 и вкладка «Календарь» на главной. */
-export const HOME_CALENDAR_MATCHES: Match[] = [
-  {
-    id: "m-2026-05-02-kairat-jastar",
-    home: TEAM_ZHAIYQ,
-    away: TEAM_KAIRAT_JASTAR,
-    kickoffAt: "2026-05-02T16:00:00+05:00",
-    venue: "Центральный стадион, Уральск",
-    competition: "Первая лига Казахстана",
-    ticketUrl: "https://tickets.example.kz/zhaiyq-kairat-jastar",
-  },
-  {
-    id: "m-2026-05-07-taraz",
-    home: TEAM_TARAZ,
-    away: TEAM_ZHAIYQ,
-    kickoffAt: "2026-05-07T00:00:00+05:00",
-    venue: "Центральный стадион, Тараз",
-    competition: "Первая лига Казахстана",
-    ticketUrl: "https://tickets.example.kz/taraz-zhaiyq",
-  },
-  {
-    id: "m-2026-05-14-batyr",
-    home: TEAM_ZHAIYQ,
-    away: TEAM_BATYR,
-    kickoffAt: "2026-05-14T00:00:00+05:00",
-    venue: "Центральный стадион, Уральск",
-    competition: "Первая лига Казахстана",
-    ticketUrl: "https://tickets.example.kz/zhaiyq-batyr",
-  },
-  {
-    id: "m-2026-05-21-caspiy",
-    home: TEAM_CASPIY_M,
-    away: TEAM_ZHAIYQ,
-    kickoffAt: "2026-05-21T00:00:00+05:00",
-    venue: "Стадион «Мунайшы», Актау",
-    competition: "Первая лига Казахстана",
-    ticketUrl: "https://tickets.example.kz/caspiy-zhaiyq",
-  },
-  {
-    id: "m-2026-05-26-aktobe-m",
-    home: TEAM_ZHAIYQ,
-    away: TEAM_AKTOBE_M,
-    kickoffAt: "2026-05-26T00:00:00+05:00",
-    venue: "Центральный стадион, Уральск",
-    competition: "Первая лига Казахстана",
-    ticketUrl: "https://tickets.example.kz/zhaiyq-aktobe-m",
-  },
-  /** Прошедший тур: матч-центр и кнопка «О матче» в календаре. */
-  {
-    id: "m-2026-04-23-zhaiyq-han-tengri",
-    home: TEAM_ZHAIYQ,
-    away: TEAM_HAN_TENGRI,
-    kickoffAt: "2026-04-23T19:00:00+05:00",
-    venue: "Центральный стадион, Уральск",
-    competition: "Первая лига Казахстана",
-    finalScore: { home: 0, away: 1 },
-  },
-];
-
-/** Ближайший матч = первая запись календаря (синхрон с блоком на главной). */
-export const NEXT_MATCH: Match = HOME_CALENDAR_MATCHES[0]!;
-
 export const NEWS_FEED: NewsFeedItem[] = [
   {
     id: "news-1",
@@ -383,6 +318,78 @@ export const NEWS_FEED: NewsFeedItem[] = [
       "https://images.unsplash.com/photo-1431324155629-1a6deb1dec8d?w=1200&q=80&auto=format&fit=crop",
     likesCount: 67,
     isLiked: false,
+  },
+];
+
+/** Мок матчей вкладки «Календарь» на главной (карточки расписания / результата). */
+export const HOME_CALENDAR_MATCHES: CalendarTabMatch[] = [
+  {
+    id: "cal-2026-05-10-zhaiyq-shakhter",
+    date: "2026-05-10T17:00:00+05:00",
+    kickoffAt: "2026-05-10T17:00:00+05:00",
+    competition: "Первая лига",
+    venue: "Орталық стадион, Атырау",
+    homeTeam: TEAM_ZHAIYQ.shortName,
+    awayTeam: TEAM_SHAKHTER_KARAGANDA.shortName,
+    homeLogo: TEAM_ZHAIYQ.logoUrl,
+    awayLogo: TEAM_SHAKHTER_KARAGANDA.logoUrl,
+    home: { ...TEAM_ZHAIYQ, score: null },
+    away: { ...TEAM_SHAKHTER_KARAGANDA, score: null },
+    homeScore: null,
+    awayScore: null,
+    ticketUrl: "#",
+    status: "upcoming",
+  },
+  {
+    id: "cal-2026-05-03-turan-zhaiyq",
+    date: "2026-05-03T16:00:00+05:00",
+    kickoffAt: "2026-05-03T16:00:00+05:00",
+    competition: "Первая лига",
+    venue: "Стадион имени Куаныша Сатпаева, Туркестан",
+    homeTeam: TEAM_TURAN.shortName,
+    awayTeam: TEAM_ZHAIYQ.shortName,
+    homeLogo: TEAM_TURAN.logoUrl,
+    awayLogo: TEAM_ZHAIYQ.logoUrl,
+    home: { ...TEAM_TURAN, score: null },
+    away: { ...TEAM_ZHAIYQ, score: null },
+    homeScore: null,
+    awayScore: null,
+    ticketUrl: "#",
+    status: "upcoming",
+  },
+  {
+    id: "m-2026-04-23-zhaiyq-han-tengri",
+    date: "2026-04-23T18:00:00+05:00",
+    kickoffAt: "2026-04-23T18:00:00+05:00",
+    competition: "Первая лига",
+    venue: "Орталық стадион, Атырау",
+    homeTeam: TEAM_ZHAIYQ.shortName,
+    awayTeam: TEAM_HAN_TENGRI.shortName,
+    homeLogo: TEAM_ZHAIYQ.logoUrl,
+    awayLogo: TEAM_HAN_TENGRI.logoUrl,
+    home: { ...TEAM_ZHAIYQ, score: 0 },
+    away: { ...TEAM_HAN_TENGRI, score: 1 },
+    homeScore: 0,
+    awayScore: 1,
+    status: "finished",
+    finalScore: { home: 0, away: 1 },
+  },
+  {
+    id: "cal-2026-04-12-taraz-zhaiyq",
+    date: "2026-04-12T15:30:00+05:00",
+    kickoffAt: "2026-04-12T15:30:00+05:00",
+    competition: "Первая лига",
+    venue: "Стадион «Тараз», Тараз",
+    homeTeam: TEAM_TARAZ.shortName,
+    awayTeam: TEAM_ZHAIYQ.shortName,
+    homeLogo: TEAM_TARAZ.logoUrl,
+    awayLogo: TEAM_ZHAIYQ.logoUrl,
+    home: { ...TEAM_TARAZ, score: 1 },
+    away: { ...TEAM_ZHAIYQ, score: 2 },
+    homeScore: 1,
+    awayScore: 2,
+    status: "finished",
+    finalScore: { home: 1, away: 2 },
   },
 ];
 
@@ -676,7 +683,7 @@ export const TICKETS: Ticket[] = [
     id: "t-001",
     matchId: "m-2026-05-02-kairat-jastar",
     opponent: "Кайрат-Жастар",
-    date: NEXT_MATCH.kickoffAt,
+    date: "2026-05-02T16:00:00+05:00",
     sector: "B",
     row: "12",
     seat: "34",

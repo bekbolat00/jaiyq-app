@@ -53,8 +53,10 @@ export default function RootLayout({
             <span className="bg-orb" />
             <span className="bg-orb" />
           </div>
-          <div className="relative z-10 mx-auto flex min-h-dvh w-full max-w-[480px] flex-col">
-            <main className="safe-top safe-bottom flex-1 px-4">{children}</main>
+          <div className="relative z-10 mx-auto flex h-dvh min-h-0 w-full max-w-[480px] flex-col">
+            <main className="safe-top safe-bottom min-h-0 flex-1 overflow-y-auto px-4 pb-24 hide-scrollbar">
+              {children}
+            </main>
             <BottomTabBar />
           </div>
         </AppShell>

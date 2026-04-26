@@ -1,87 +1,115 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-const STORAGE_KEY = "jaiyq:global-music";
-const THUMB = 22;
-const PAD = 2;
-const TRACK_W = 48;
-/** Horizontal travel for the thumb (iOS-style inset). */
-const TRAVEL = TRACK_W - PAD * 2 - THUMB;
-
-let globalAudio: HTMLAudioElement | null = null;
+type AudioState = "loading" | "ready" | "error";
 
 export default function MusicToggle() {
-  const [on, setOn] = useState(false);
-  const [ready, setReady] = useState(false);
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [audioState, setAudioState] = useState<AudioState>("loading");
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (!globalAudio) {
-      globalAudio = new Audio("/sounds/uralsk.mp3");
-      globalAudio.loop = true;
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const handleReady = () => setAudioState("ready");
+    const handleError = () => {
+      setIsPlaying(false);
+      setAudioState("error");
+    };
+
+    audio.addEventListener("canplay", handleReady);
+    audio.addEventListener("error", handleError);
+    if (audio.readyState >= 2) setAudioState("ready");
+
+    return () => {
+      audio.removeEventListener("canplay", handleReady);
+      audio.removeEventListener("error", handleError);
+    };
+  }, []);
+
+  const handleClick = useCallback(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    if (audioState === "error") {
+      setAudioState("loading");
+      audio.load();
+      return;
     }
-  }, []);
 
-  useEffect(() => {
-    queueMicrotask(() => {
-      try {
-        if (localStorage.getItem(STORAGE_KEY) === "on") setOn(true);
-      } catch {
-        /* ignore */
-      }
-      setReady(true);
-    });
-  }, []);
+    if (audioState !== "ready") return;
 
-  const applyPlayback = useCallback((next: boolean) => {
-    const el = globalAudio;
-    if (!el) return;
-    if (next) {
-      try {
-        void el.play().catch(() => {
-          /* autoplay / gesture policy */
+    if (audio.paused) {
+      void audio
+        .play()
+        .then(() => setIsPlaying(true))
+        .catch((err: unknown) => {
+          const name = err instanceof Error ? err.name : "Error";
+          const message = err instanceof Error ? err.message : String(err);
+          console.warn(name, message);
         });
-      } catch {
-        /* ignore */
-      }
     } else {
-      el.pause();
+      audio.pause();
+      setIsPlaying(false);
     }
-  }, []);
+  }, [audioState]);
 
-  useEffect(() => {
-    if (!ready) return;
-    try {
-      localStorage.setItem(STORAGE_KEY, on ? "on" : "off");
-    } catch {
-      /* ignore */
-    }
-    applyPlayback(on);
-  }, [on, ready, applyPlayback]);
+  const ariaLabel =
+    audioState === "loading"
+      ? "Загрузка музыки"
+      : audioState === "error"
+        ? "Ошибка загрузки. Нажмите, чтобы повторить"
+        : isPlaying
+          ? "Выключить музыку"
+          : "Включить музыку";
+
+  const trackClass =
+    audioState === "error"
+      ? "bg-red-500/50"
+      : audioState === "ready"
+        ? isPlaying
+          ? "bg-accent"
+          : "bg-white/20"
+        : "bg-white/20";
 
   return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={on}
-      aria-label={on ? "Музыка включена" : "Музыка выключена"}
-      onClick={() => setOn((v) => !v)}
-      className="relative h-7 w-12 shrink-0 appearance-none overflow-hidden rounded-full border-0 bg-transparent p-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-    >
-      <div
-        className={`absolute inset-0 rounded-full transition-colors duration-200 ${
-          on ? "bg-accent" : "bg-white/20"
-        }`}
+    <>
+      <button
+        type="button"
+        disabled={audioState === "loading"}
+        onClick={handleClick}
+        aria-pressed={audioState === "ready" ? isPlaying : undefined}
+        aria-busy={audioState === "loading"}
+        aria-label={ariaLabel}
+        className={`relative h-6 w-12 shrink-0 overflow-hidden rounded-full border-0 p-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
+          audioState === "loading" ? "cursor-not-allowed opacity-50" : ""
+        } ${audioState === "error" ? "cursor-pointer" : ""}`}
+      >
+        <div className={`absolute inset-0 ${trackClass}`} />
+        <motion.span
+          className="pointer-events-none absolute top-0.5 left-0 h-5 w-5 rounded-full bg-white shadow-sm"
+          initial={false}
+          animate={{ x: isPlaying ? 24 : 2 }}
+          transition={{
+            type: "spring",
+            stiffness: 500,
+            damping: 32,
+            mass: 0.4,
+          }}
+        />
+      </button>
+
+      <audio
+        ref={audioRef}
+        src="/sounds/uralsk.mp3"
+        preload="auto"
+        loop
+        playsInline
+        style={{ display: "none" }}
       />
-      <motion.span
-        className="pointer-events-none absolute top-[3px] z-10 h-[22px] w-[22px] rounded-full bg-white shadow-sm"
-        style={{ left: PAD }}
-        initial={false}
-        animate={{ x: on ? TRAVEL : 0 }}
-        transition={{ type: "spring", stiffness: 500, damping: 32, mass: 0.4 }}
-      />
-    </button>
+    </>
   );
 }

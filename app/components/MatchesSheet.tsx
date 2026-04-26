@@ -16,6 +16,7 @@ type Props = {
   fetchError: string | null;
   matches: DbMatchRow[];
   onExpertClick: (row: DbMatchRow) => void;
+  onOpenMatchDetail?: (matchId: string) => void;
 };
 
 const sheetVariants = {
@@ -61,6 +62,7 @@ export default function MatchesSheet({
   fetchError,
   matches,
   onExpertClick,
+  onOpenMatchDetail,
 }: Props) {
   const [innerTab, setInnerTab] = useState<InnerTab>("schedule");
   const [gridOpen, setGridOpen] = useState(false);
@@ -255,7 +257,16 @@ export default function MatchesSheet({
                         </motion.p>
                       ) : (
                         finishedRows.map((row, i) => (
-                          <FinishedMatchResultCard key={row.id} row={row} index={i} />
+                          <FinishedMatchResultCard
+                            key={row.id}
+                            row={row}
+                            index={i}
+                            onAboutMatch={
+                              onOpenMatchDetail
+                                ? () => onOpenMatchDetail(row.id)
+                                : undefined
+                            }
+                          />
                         ))
                       )}
                     </motion.div>

@@ -163,14 +163,38 @@ export const LIVE_TIMELINE: LiveTimelineEvent[] = [
   },
 ];
 
-/** Доли хозяев / гостей: владение в %; удары и угловые — как доли от суммы. */
-export const LIVE_MATCH_STATS = {
-  possession: { home: 54, away: 46 },
-  shotsOnTarget: { home: 5, away: 3 },
-  corners: { home: 6, away: 4 },
-} as const;
+export type LiveMatchStatsShape = {
+  possession: { home: number; away: number };
+  /** Удары всего */
+  shots: { home: number; away: number };
+  shotsOnTarget: { home: number; away: number };
+  corners: { home: number; away: number };
+  offsides: { home: number; away: number };
+  saves: { home: number; away: number };
+  yellowCards: { home: number; away: number };
+};
 
-export type LiveMatchStatsShape = typeof LIVE_MATCH_STATS;
+/** Доли хозяев / гостей: владение в %; удары и угловые — как доли от суммы. */
+export const LIVE_MATCH_STATS: LiveMatchStatsShape = {
+  possession: { home: 54, away: 46 },
+  shots: { home: 5, away: 3 },
+  shotsOnTarget: { home: 2, away: 1 },
+  corners: { home: 6, away: 4 },
+  offsides: { home: 3, away: 2 },
+  saves: { home: 4, away: 5 },
+  yellowCards: { home: 2, away: 1 },
+};
+
+/** Запасной набор для матч-центра, когда в БД ещё нет строк `match_stats` (Арыс — Жайык). */
+export const LIVE_MATCH_STATS_ARYS_ZHAIYQ_FALLBACK: LiveMatchStatsShape = {
+  possession: { home: 59, away: 41 },
+  shots: { home: 18, away: 7 },
+  shotsOnTarget: { home: 8, away: 2 },
+  corners: { home: 11, away: 2 },
+  offsides: { home: 2, away: 5 },
+  saves: { home: 6, away: 9 },
+  yellowCards: { home: 4, away: 2 },
+};
 
 /** Таймлайн для матча Жайык (дома) — Хан Тенгри: счёт 0:1. */
 export const PAST_ZHAIYQ_VS_HAN_TENGRI_TIMELINE: LiveTimelineEvent[] = [
@@ -373,6 +397,142 @@ export const HOME_CALENDAR_MATCHES: CalendarTabMatch[] = [
     awayScore: 1,
     status: "finished",
     finalScore: { home: 0, away: 1 },
+    scorers: [{ name: "Калиев", minute: 78, teamId: TEAM_HAN_TENGRI.id }],
+    lineup: {
+      home: [
+        "Ерлан Ахметов",
+        "Данияр Сагинтаев",
+        "Марат Ибраев",
+        "Асылан Нурпеисов",
+        "Тимур Жанузаков",
+        "Алишер Кенжебеков",
+        "Ерлан Мұхтар",
+        "Нұрлан Сәрсен",
+        "Бауыржан Омар",
+        "Руслан Темір",
+        "Айдар Беккожа",
+      ],
+      away: [
+        "Садвакас",
+        "Нуржан",
+        "Рахимов",
+        "Калиев",
+        "Беккожа",
+        "Омар",
+        "Сарым",
+        "Мұхтар",
+        "Ашим",
+        "Темір",
+        "Ермек",
+      ],
+    },
+    stats: {
+      possession: [54, 46],
+      shots: [16, 9],
+      corners: [7, 3],
+    },
+    experts: [
+      {
+        name: "Арман Қасым",
+        prediction: "Жайык не проиграет — минимум ничья.",
+        avatar:
+          "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=128&h=128&fit=crop&facepad=2",
+        status: "мимо",
+      },
+      {
+        name: "Дана Сәрсенова",
+        prediction: "Сухая победа хозяев 1:0.",
+        avatar:
+          "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=128&h=128&fit=crop&facepad=2",
+        status: "мимо",
+      },
+      {
+        name: "Ерболат Мұқанов",
+        prediction: "Обмен голами, тотал больше 2,5.",
+        avatar:
+          "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=128&h=128&fit=crop&facepad=2",
+        status: "частично",
+      },
+    ],
+  },
+  {
+    id: "cal-2026-04-19-zhaiyq-kairat-jastar",
+    date: "2026-04-19T18:00:00+05:00",
+    kickoffAt: "2026-04-19T18:00:00+05:00",
+    competition: "Первая лига",
+    venue: "Орталық стадион, Атырау",
+    homeTeam: TEAM_ZHAIYQ.shortName,
+    awayTeam: TEAM_KAIRAT_JASTAR.shortName,
+    homeLogo: TEAM_ZHAIYQ.logoUrl,
+    awayLogo: TEAM_KAIRAT_JASTAR.logoUrl,
+    home: { ...TEAM_ZHAIYQ, score: 2 },
+    away: { ...TEAM_KAIRAT_JASTAR, score: 2 },
+    homeScore: 2,
+    awayScore: 2,
+    status: "finished",
+    finalScore: { home: 2, away: 2 },
+    scorers: [
+      { name: "Ахмет", minute: 12, teamId: TEAM_ZHAIYQ.id },
+      { name: "Сидоров", minute: 38, teamId: TEAM_KAIRAT_JASTAR.id },
+      { name: "Ахмет", minute: 45, teamId: TEAM_ZHAIYQ.id },
+      { name: "Нурланов", minute: 81, teamId: TEAM_KAIRAT_JASTAR.id },
+    ],
+    lineup: {
+      home: [
+        "Ерлан Ахметов",
+        "Данияр Сагинтаев",
+        "Марат Ибраев",
+        "Асылан Нурпеисов",
+        "Тимур Жанузаков",
+        "Алишер Кенжебеков",
+        "Нұрсұлтан Омаров",
+        "Ербол Сәтбаев",
+        "Айболат Жұмағали",
+        "Руслан Елеусінов",
+        "Дәулет Қайыржан",
+      ],
+      away: [
+        "Алмас Бекмурза",
+        "Ерасыл Сидоров",
+        "Нурлан Нурланов",
+        "Арман Қуаныш",
+        "Данияр Мұрат",
+        "Ержан Әлім",
+        "Санжар Төлеу",
+        "Бағдат Ораз",
+        "Мұрат Әлі",
+        "Айдар Нұрлан",
+        "Елнұр Сағын",
+      ],
+    },
+    stats: {
+      possession: [45, 55],
+      shots: [12, 15],
+      corners: [5, 8],
+    },
+    experts: [
+      {
+        name: "Марат Әлімов",
+        prediction: "Жайык уверенно берёт три очка — 2:0.",
+        avatar:
+          "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=128&h=128&fit=crop&facepad=2",
+        status: "мимо",
+      },
+      {
+        name: "Айгүл Нұртаева",
+        prediction: "Ничья с голами — 1:1 или 2:2.",
+        avatar:
+          "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=128&h=128&fit=crop&facepad=2",
+        status: "верно",
+      },
+      {
+        name: "Олег Воронин",
+        prediction: "Кайрат-Жастар забивает первым, тотал больше 2,5.",
+        avatar:
+          "https://images.unsplash.com/photo-1519345182560-3f2917c472ef?w=128&h=128&fit=crop&facepad=2",
+        status: "частично",
+      },
+    ],
   },
   {
     id: "cal-2026-04-12-taraz-zhaiyq",
@@ -390,6 +550,60 @@ export const HOME_CALENDAR_MATCHES: CalendarTabMatch[] = [
     awayScore: 2,
     status: "finished",
     finalScore: { home: 1, away: 2 },
+    scorers: [
+      { name: "Петренко", minute: 23, teamId: TEAM_TARAZ.id },
+      { name: "Сагинтаев", minute: 56, teamId: TEAM_ZHAIYQ.id },
+      { name: "Ибраев", minute: 74, teamId: TEAM_ZHAIYQ.id },
+    ],
+    lineup: {
+      home: [
+        "Игорь Петренко",
+        "Асхат Мұрат",
+        "Ерлан Сәрсен",
+        "Данияр Омар",
+        "Нұрлан Бек",
+        "Айдар Төлеу",
+        "Мұрат Әлім",
+        "Санжар Нұр",
+        "Ербол Сәт",
+        "Асылан Тар",
+        "Дәулет Қай",
+      ],
+      away: [
+        "Ерлан Ахметов",
+        "Данияр Сагинтаев",
+        "Марат Ибраев",
+        "Асылан Нурпеисов",
+        "Тимур Жанузаков",
+        "Алишер Кенжебеков",
+        "Нұрсұлтан Омаров",
+        "Ербол Сәтбаев",
+        "Айболат Жұмағали",
+        "Руслан Елеусінов",
+        "Дәулет Қайыржан",
+      ],
+    },
+    stats: {
+      possession: [41, 59],
+      shots: [9, 14],
+      corners: [4, 6],
+    },
+    experts: [
+      {
+        name: "Қайрат Болатұлы",
+        prediction: "Жайык выиграет в гостях — классический 0:2.",
+        avatar:
+          "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=128&h=128&fit=crop&facepad=2",
+        status: "частично",
+      },
+      {
+        name: "Светлана Орлова",
+        prediction: "Обе забьют, победа Жайыка.",
+        avatar:
+          "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=128&h=128&fit=crop&facepad=2",
+        status: "верно",
+      },
+    ],
   },
 ];
 

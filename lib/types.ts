@@ -26,6 +26,100 @@ export type Team = {
   logoUrl: string;
 };
 
+/**
+ * Событие матча в `public.match_events` (см. Supabase).
+ * `type` / `event_type` — в зависимости от схемы; маппер поддерживает оба.
+ */
+export type MatchEventType =
+  | "goal"
+  | "yellow_card"
+  | "red_card"
+  | "substitution"
+  | string;
+
+export type DbTeamRow = {
+  id: string;
+  short_name: string;
+  full_name: string;
+  logo_url: string | null;
+  slug?: string | null;
+};
+
+export type DbPlayerRow = {
+  id: string;
+  team_id: string;
+  first_name: string;
+  last_name: string;
+  number?: number | null;
+  jersey_number?: number | null;
+  position: string;
+};
+
+export type DbMatchEventRow = {
+  id: string;
+  match_id: string;
+  team_id: string;
+  minute: number;
+  event_type?: MatchEventType;
+  type?: string | null;
+  player_id?: string | null;
+  /** Готовая подпись, если в БД есть */
+  description?: string | null;
+  details?: string | null;
+  player_in_id?: string | null;
+  player_out_id?: string | null;
+  assist_player_id?: string | null;
+  /** Вложенный `players` при `match_events(*, player:players(*))` */
+  player?: DbPlayerRow | null;
+};
+
+/** Одна строка статистики на команду: `public.match_stats`. */
+export type DbMatchStatRow = {
+  id: string;
+  match_id: string;
+  team_id: string;
+  /** 0–100, доля владения */
+  possession?: number | null;
+  possession_pct?: number | null;
+  /** Удары всего (если поле в БД называется иначе — смотрите mapMatchDetail). */
+  shots?: number | null;
+  total_shots?: number | null;
+  corners?: number | null;
+  shots_on_target?: number | null;
+  offsides?: number | null;
+  saves?: number | null;
+  yellow_cards?: number | null;
+  /** Опционально, если в миграции задано — сразу сторона */
+  is_home?: boolean | null;
+};
+
+export type MatchLineupRole = "starter" | "bench" | "coach" | string;
+
+export type DbMatchLineupRow = {
+  id: string;
+  match_id: string;
+  team_id: string;
+  player_id: string;
+  role?: MatchLineupRole;
+  is_substitute?: boolean | null;
+  is_coach?: boolean | null;
+  shirt_number?: number | null;
+  sort_order?: number | null;
+  position_override?: string | null;
+  player?: DbPlayerRow | null;
+};
+
+/**
+ * Ответ с вложенными сущностями:
+ * .select('*, match_events(*), match_stats(*), match_lineups(player:players(*))')
+ * (при необходимости: match_events с join на игрока — в fetch допускается).
+ */
+export type DbMatchWithRelations = DbMatchRow & {
+  match_events: DbMatchEventRow[] | null;
+  match_stats: DbMatchStatRow[] | null;
+  match_lineups: DbMatchLineupRow[] | null;
+};
+
 export type Match = {
   id: string;
   home: Team;
@@ -36,6 +130,41 @@ export type Match = {
   ticketUrl?: string;
   /** Итог для прошедших матчей (кнопка «О матче» / матч-центр). */
   finalScore?: { home: number; away: number };
+  /**
+   * Полные данные с Supabase (когда подгружены через матч-центр / API).
+   * `statsByTeam` — после маппинга по сторонам хозяев/гостей.
+   */
+  matchEvents?: DbMatchEventRow[];
+  matchStats?: { home: DbMatchStatRow; away: DbMatchStatRow } | null;
+  matchLineups?: (DbMatchLineupRow & { player: DbPlayerRow | null })[];
+};
+
+/** Гол для матч-центра / календаря (`teamId` — как у `Team.id`). */
+export type CalendarTabMatchScorer = {
+  name: string;
+  minute: number;
+  teamId: string;
+};
+
+/** Составы по сторонам (имена игроков). */
+export type CalendarTabMatchLineup = {
+  home: string[];
+  away: string[];
+};
+
+/** Статистика: кортежи [хозяева, гости] (владение — доли в процентах). */
+export type CalendarTabMatchStats = {
+  possession: [number, number];
+  shots: [number, number];
+  corners: [number, number];
+};
+
+/** Эксперт с прогнозом на матч. */
+export type CalendarTabMatchExpert = {
+  name: string;
+  prediction: string;
+  avatar: string;
+  status: string;
 };
 
 export type CalendarTabMatch = {
@@ -59,6 +188,14 @@ export type CalendarTabMatch = {
   status: "upcoming" | "finished";
   /** Итог для прошедших матчей (как у типа `Match`). */
   finalScore?: { home: number; away: number };
+  /** Матч-центр: авторы голов (если данных нет — поле отсутствует). */
+  scorers?: CalendarTabMatchScorer[];
+  /** Составы для детальной карточки. */
+  lineup?: CalendarTabMatchLineup;
+  /** Владение, удары, угловые [дом, в гостях]. */
+  stats?: CalendarTabMatchStats;
+  /** Прогнозы экспертов. */
+  experts?: CalendarTabMatchExpert[];
 };
 
 /** Строка `public.matches` из Supabase (основные поля UI). */

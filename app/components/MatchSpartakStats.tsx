@@ -52,41 +52,74 @@ function StatRow({
   );
 }
 
+type RowKey =
+  | "possession"
+  | "shots"
+  | "shotsOnTarget"
+  | "corners"
+  | "offsides"
+  | "saves"
+  | "yellowCards";
+
 type Props = {
   stats: LiveMatchStatsShape;
   className?: string;
-  /** По умолчанию все три; для матч-центра можно оставить только владение и удары. */
-  rows?: ("possession" | "shotsOnTarget" | "corners")[];
+  /** По умолчанию владение, удары, удары в створ, угловые. */
+  rows?: RowKey[];
+  /** Переименования метрик. */
+  labelOverrides?: Partial<Record<RowKey, string>>;
 };
+
+const DEFAULT_LABELS: Record<RowKey, string> = {
+  possession: "Владение мячом",
+  shots: "Удары",
+  shotsOnTarget: "Удары в створ",
+  corners: "Угловые",
+  offsides: "Оффсайды",
+  saves: "Сэйвы",
+  yellowCards: "Жёлтые карточки",
+};
+
+function pickPair(stats: LiveMatchStatsShape, key: RowKey): { home: number; away: number } {
+  switch (key) {
+    case "possession":
+      return stats.possession;
+    case "shots":
+      return stats.shots;
+    case "shotsOnTarget":
+      return stats.shotsOnTarget;
+    case "corners":
+      return stats.corners;
+    case "offsides":
+      return stats.offsides;
+    case "saves":
+      return stats.saves;
+    case "yellowCards":
+      return stats.yellowCards;
+    default:
+      return { home: 0, away: 0 };
+  }
+}
 
 export default function MatchSpartakStats({
   stats,
   className = "",
-  rows = ["possession", "shotsOnTarget", "corners"],
+  rows = ["possession", "shots", "shotsOnTarget", "corners"],
+  labelOverrides = {},
 }: Props) {
   return (
     <div className={`mt-6 space-y-6 ${className}`}>
-      {rows.includes("possession") ? (
-        <StatRow
-          label="Владение мячом"
-          home={stats.possession.home}
-          away={stats.possession.away}
-        />
-      ) : null}
-      {rows.includes("shotsOnTarget") ? (
-        <StatRow
-          label="Удары в створ"
-          home={stats.shotsOnTarget.home}
-          away={stats.shotsOnTarget.away}
-        />
-      ) : null}
-      {rows.includes("corners") ? (
-        <StatRow
-          label="Угловые"
-          home={stats.corners.home}
-          away={stats.corners.away}
-        />
-      ) : null}
+      {rows.map((key) => {
+        const { home, away } = pickPair(stats, key);
+        return (
+          <StatRow
+            key={key}
+            label={labelOverrides[key] ?? DEFAULT_LABELS[key]}
+            home={home}
+            away={away}
+          />
+        );
+      })}
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useCallback, useState } from "react";
 import { HOME_STANDINGS } from "@/lib/data/mock";
 import MainTabPanel from "@/app/components/MainTabPanel";
+import MatchDetailSheet from "@/app/components/MatchDetailSheet";
 import MatchesSheet from "@/app/components/MatchesSheet";
 import StandingsPanel from "@/app/components/StandingsPanel";
 import type { UseAppMatchesResult } from "@/app/hooks/useAppMatches";
@@ -40,6 +41,7 @@ type Props = {
 export default function HomeSectionTabs({ coins, matchesState, onExpertClick }: Props) {
   const [tab, setTab] = useState<TabId>("main");
   const [matchesOpen, setMatchesOpen] = useState(false);
+  const [matchDetailId, setMatchDetailId] = useState<string | null>(null);
 
   const { loading, error, upcomingMatches, pastMatches } = matchesState;
 
@@ -55,6 +57,11 @@ export default function HomeSectionTabs({ coins, matchesState, onExpertClick }: 
 
   return (
     <div className="space-y-4">
+      <MatchDetailSheet
+        open={matchDetailId !== null}
+        onClose={() => setMatchDetailId(null)}
+        matchId={matchDetailId}
+      />
       <MatchesSheet
         open={matchesOpen}
         onClose={closeMatches}
@@ -63,6 +70,9 @@ export default function HomeSectionTabs({ coins, matchesState, onExpertClick }: 
         fetchError={error}
         matches={[...upcomingMatches, ...pastMatches]}
         onExpertClick={onExpertClick}
+        onOpenMatchDetail={(id) => {
+          setMatchDetailId(id);
+        }}
       />
 
       <div
@@ -117,7 +127,13 @@ export default function HomeSectionTabs({ coins, matchesState, onExpertClick }: 
             exit="exit"
             className="flex flex-col gap-6"
           >
-            <MainTabPanel onViewAllMatches={openMatches} pastMatches={pastMatches} />
+            <MainTabPanel
+              onViewAllMatches={openMatches}
+              pastMatches={pastMatches}
+              onOpenMatchDetail={(id) => {
+                setMatchDetailId(id);
+              }}
+            />
           </motion.div>
         ) : null}
         {tab === "table" && !matchesOpen ? (

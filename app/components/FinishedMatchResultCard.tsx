@@ -38,9 +38,11 @@ function displayScore(row: DbMatchRow): { left: number; right: number; leftTeam:
 type Props = {
   row: DbMatchRow;
   index?: number;
+  /** Кнопка «О МАТЧЕ» (матч-центр). */
+  onAboutMatch?: () => void;
 };
 
-export default function FinishedMatchResultCard({ row, index = 0 }: Props) {
+export default function FinishedMatchResultCard({ row, index = 0, onAboutMatch }: Props) {
   const { left, right, leftTeam, rightTeam } = displayScore(row);
   const details = row.match_details?.trim();
 
@@ -73,6 +75,16 @@ export default function FinishedMatchResultCard({ row, index = 0 }: Props) {
 
       {details ? (
         <p className="mt-3 text-center text-[10px] leading-relaxed text-white/40">{details}</p>
+      ) : null}
+
+      {onAboutMatch ? (
+        <button
+          type="button"
+          onClick={onAboutMatch}
+          className="mt-3 flex w-full items-center justify-center rounded-2xl border border-white/14 bg-gradient-to-b from-white/[0.11] to-white/[0.04] py-2.5 text-center text-[11px] font-black uppercase tracking-[0.14em] text-white/90 transition-[transform,box-shadow,background-color] [box-shadow:0_0_20px_rgba(0,240,255,0.12)] hover:border-accent/30 hover:from-white/[0.16] active:scale-[0.99]"
+        >
+          О МАТЧЕ
+        </button>
       ) : null}
     </motion.article>
   );

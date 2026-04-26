@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import type { Match } from "@/lib/types";
-import { getMatchCenterForMatch } from "@/lib/data/mock";
 import TeamBadge from "@/app/components/TeamBadge";
 import InviteFriendSheet from "@/app/components/InviteFriendSheet";
 import MatchDetailSheet from "@/app/components/MatchDetailSheet";
@@ -29,7 +28,7 @@ function MatchRow({
   match: Match;
   index: number;
   onInvite: (m: Match) => void;
-  onMatchCenter: (m: Match) => void;
+  onMatchCenter: (matchId: string) => void;
 }) {
   const when = dateFmt.format(new Date(match.kickoffAt));
   const href = match.ticketUrl ?? "#";
@@ -68,7 +67,7 @@ function MatchRow({
         {past ? (
           <button
             type="button"
-            onClick={() => onMatchCenter(match)}
+            onClick={() => onMatchCenter(match.id)}
             className="flex w-full items-center justify-center rounded-2xl border border-white/20 bg-white/5 py-3.5 text-center text-[13px] font-black uppercase tracking-[0.12em] text-white transition-colors hover:bg-white/[0.08] active:scale-[0.98]"
           >
             О МАТЧЕ
@@ -114,15 +113,14 @@ function MatchRow({
 
 export default function MatchCalendarPanel({ matches }: { matches: Match[] }) {
   const [inviteFor, setInviteFor] = useState<Match | null>(null);
-  const [matchCenterFor, setMatchCenterFor] = useState<Match | null>(null);
-  const sheetDetail = matchCenterFor ? getMatchCenterForMatch(matchCenterFor) : null;
+  const [matchDetailId, setMatchDetailId] = useState<string | null>(null);
 
   return (
     <>
       <MatchDetailSheet
-        open={matchCenterFor !== null}
-        onClose={() => setMatchCenterFor(null)}
-        detail={sheetDetail}
+        open={matchDetailId !== null}
+        onClose={() => setMatchDetailId(null)}
+        matchId={matchDetailId}
       />
       <InviteFriendSheet
         open={inviteFor !== null}
@@ -136,7 +134,7 @@ export default function MatchCalendarPanel({ matches }: { matches: Match[] }) {
             match={m}
             index={i}
             onInvite={setInviteFor}
-            onMatchCenter={setMatchCenterFor}
+            onMatchCenter={setMatchDetailId}
           />
         ))}
       </ul>

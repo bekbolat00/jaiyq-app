@@ -9,9 +9,10 @@ import type { DbMatchRow } from "@/lib/types";
 type Props = {
   onViewAllMatches: () => void;
   pastMatches: DbMatchRow[];
+  onOpenMatchDetail?: (matchId: string) => void;
 };
 
-export default function MainTabPanel({ onViewAllMatches, pastMatches }: Props) {
+export default function MainTabPanel({ onViewAllMatches, pastMatches, onOpenMatchDetail }: Props) {
   const homePast = useMemo(() => pastMatches.slice(0, 8), [pastMatches]);
 
   return (
@@ -43,7 +44,15 @@ export default function MainTabPanel({ onViewAllMatches, pastMatches }: Props) {
                 }}
                 className="min-w-[280px] shrink-0 snap-center"
               >
-                <FinishedMatchResultCard row={row} index={index} />
+                <FinishedMatchResultCard
+                  row={row}
+                  index={index}
+                  onAboutMatch={
+                    onOpenMatchDetail
+                      ? () => onOpenMatchDetail(row.id)
+                      : undefined
+                  }
+                />
               </motion.div>
             ))}
           </div>

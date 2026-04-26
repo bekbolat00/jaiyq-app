@@ -3,43 +3,33 @@
 import { motion } from "framer-motion";
 import type { LiveTimelineEvent } from "@/lib/data/mock";
 
-function TimelineIcon({ type }: { type: LiveTimelineEvent["type"] }) {
+function EventIcon({ type }: { type: LiveTimelineEvent["type"] }) {
   if (type === "goal") {
     return (
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-accent/40 bg-accent/15 text-accent neon-cyan">
-        <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" aria-hidden>
-          <circle cx="12" cy="12" r="6.5" stroke="currentColor" strokeWidth="1.35" />
-          <path
-            d="M12 5.5v13M7.2 8.2l9.6 7.6M7.2 15.8l9.6-7.6"
-            stroke="currentColor"
-            strokeWidth="1"
-            strokeLinecap="round"
-            opacity={0.85}
-          />
-        </svg>
+      <span
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/[0.08] text-[20px] leading-none shadow-[0_0_20px_rgba(0,240,255,0.15)]"
+        aria-hidden
+      >
+        ⚽
       </span>
     );
   }
   if (type === "yellow") {
     return (
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[#fbbf24]/50 bg-[#fbbf24]/20">
-        <span className="h-5 w-3.5 rounded-[2px] bg-[#facc15] shadow-[0_0_12px_rgba(250,204,21,0.55)]" />
+      <span
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#fbbf24]/35 bg-[#fbbf24]/10 text-[18px] leading-none"
+        aria-hidden
+      >
+        🟨
       </span>
     );
   }
   return (
-    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/20 bg-white/10 text-foreground">
-      <svg
-        viewBox="0 0 24 24"
-        className="h-[18px] w-[18px]"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.7"
-        aria-hidden
-      >
-        <path d="M7 7h6v6H7zM11 11h6v6h-6z" strokeLinejoin="round" />
-        <path d="M9 9l6 6M15 9 9 15" strokeLinecap="round" opacity={0.35} />
-      </svg>
+    <span
+      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/[0.06] text-[17px] leading-none"
+      aria-hidden
+    >
+      🔄
     </span>
   );
 }
@@ -60,31 +50,70 @@ export default function MatchTimeline({
       {heading ? (
         <h4 className="text-[11px] font-bold uppercase tracking-[0.18em] text-muted">{heading}</h4>
       ) : null}
-      <ul className={`space-y-0 ${heading ? "mt-4" : ""}`}>
-        {events.map((ev, i) => (
-          <motion.li
-            key={ev.id}
-            initial={{ opacity: 0, x: -10 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.06 * i, duration: 0.35 }}
-            className="flex gap-3 pb-5 last:pb-0"
-          >
-            <div className="flex w-9 shrink-0 flex-col items-center">
-              <TimelineIcon type={ev.type} />
-              {i < events.length - 1 ? (
-                <div
-                  className="mt-2 min-h-[28px] w-px flex-1 bg-gradient-to-b from-white/35 to-white/5"
-                  aria-hidden
-                />
-              ) : null}
-            </div>
-            <div className="min-w-0 pt-0.5">
-              <p className="text-[12px] font-bold tabular-nums text-accent">{ev.minute}&apos;</p>
-              <p className="mt-0.5 text-[13px] leading-snug text-foreground/90">{ev.label}</p>
-            </div>
-          </motion.li>
-        ))}
-      </ul>
+      <div className={`relative ${heading ? "mt-4" : ""}`}>
+        <div
+          className="absolute bottom-2 left-1/2 top-2 z-0 w-px -translate-x-1/2 bg-gradient-to-b from-white/10 via-white/35 to-white/10"
+          aria-hidden
+        />
+        <ul className="relative z-[1] space-y-0">
+          {events.map((ev, i) => {
+            const isHome = ev.side === "home";
+            return (
+              <li key={ev.id} className="grid grid-cols-[1fr_auto_1fr] items-center gap-x-1 gap-y-0 pb-6 last:pb-1">
+                <div className="flex min-w-0 justify-end pr-1">
+                  {isHome ? (
+                    <motion.div
+                      initial={{ opacity: 0, x: -28 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.05 * i, duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+                      className="max-w-[min(100%,11.5rem)] rounded-2xl border border-white/[0.1] bg-gradient-to-br from-white/[0.09] to-white/[0.02] px-2.5 py-2 text-right shadow-[0_8px_24px_rgba(0,0,0,0.35)] backdrop-blur-md"
+                    >
+                      <div className="flex items-center justify-end gap-2">
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-black tabular-nums text-accent">{ev.minute}&apos;</p>
+                          <p className="mt-0.5 text-[11px] font-semibold leading-snug text-foreground/90 [text-wrap:balance]">
+                            {ev.label}
+                          </p>
+                        </div>
+                        <EventIcon type={ev.type} />
+                      </div>
+                    </motion.div>
+                  ) : (
+                    <span className="block h-px w-full max-w-[4rem] opacity-0" aria-hidden />
+                  )}
+                </div>
+
+                <div className="flex w-11 shrink-0 flex-col items-center pt-0.5">
+                  <span className="h-2 w-2 rounded-full border border-white/25 bg-[#020408] shadow-[0_0_0_3px_rgba(255,255,255,0.06)]" />
+                </div>
+
+                <div className="flex min-w-0 justify-start pl-1">
+                  {!isHome ? (
+                    <motion.div
+                      initial={{ opacity: 0, x: 28 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.05 * i, duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+                      className="max-w-[min(100%,11.5rem)] rounded-2xl border border-accent/25 bg-gradient-to-bl from-accent/12 to-white/[0.03] px-2.5 py-2 text-left shadow-[0_8px_24px_rgba(0,0,0,0.35)] backdrop-blur-md"
+                    >
+                      <div className="flex items-center justify-start gap-2">
+                        <EventIcon type={ev.type} />
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-black tabular-nums text-accent">{ev.minute}&apos;</p>
+                          <p className="mt-0.5 text-[11px] font-semibold leading-snug text-foreground/90 [text-wrap:balance]">
+                            {ev.label}
+                          </p>
+                        </div>
+                      </div>
+                    </motion.div>
+                  ) : (
+                    <span className="block h-px w-full max-w-[4rem] opacity-0" aria-hidden />
+                  )}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
     </div>
   );
 }

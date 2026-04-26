@@ -6,12 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { TEAM_ZHAIYQ } from "@/lib/constants/zhaiyq";
 import { dbMatchRowToMatch } from "@/lib/matches/mapDbMatch";
-import type { DbMatchRow, Team } from "@/lib/types";
-
-function pickTeamLogoUrl(team: Team & { logo?: string }): string {
-  const raw = (team.logo ?? team.logoUrl ?? "").trim();
-  return raw;
-}
+import type { DbMatchRow } from "@/lib/types";
 
 type Props = {
   open: boolean;
@@ -81,6 +76,18 @@ export default function CalendarGridSheet({ open, onClose }: Props) {
     }
     return map;
   }, [matches]);
+
+  const filtered = useMemo(
+    () =>
+      matches
+        .filter((row) => {
+          if (!row.match_date) return false;
+          const d = new Date(row.match_date);
+          return d.getFullYear() === y && d.getMonth() === m;
+        })
+        .map(dbMatchRowToMatch),
+    [matches, y, m],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -206,19 +213,18 @@ export default function CalendarGridSheet({ open, onClose }: Props) {
                     }
                     const { day } = cell;
                     const ymd = toYmd(y, m, day);
+                    const dayMatch: ReturnType<typeof dbMatchRowToMatch> | undefined = filtered.find(
+                      (m) => new Date(m.kickoffAt).getDate() === day,
+                    );
                     const match = matchByYmd.get(ymd) ?? null;
                     const selected = selectedYmd === ymd;
-                    const opponentLogoUrl = match
-                      ? (() => {
-                          const m = dbMatchRowToMatch(match);
-                          const zhaiyqHome =
-                            m.home.id === TEAM_ZHAIYQ.id ||
-                            m.home.fullName === TEAM_ZHAIYQ.fullName ||
-                            m.home.shortName === TEAM_ZHAIYQ.shortName;
-                          return zhaiyqHome ? pickTeamLogoUrl(m.away) : pickTeamLogoUrl(m.home);
-                        })()
-                      : "";
-                    const hasLogo = Boolean(opponentLogoUrl?.trim());
+                    const isZhaiyqHome =
+                      dayMatch &&
+                      (dayMatch.home.id === TEAM_ZHAIYQ.id ||
+                        dayMatch.home.fullName === TEAM_ZHAIYQ.fullName ||
+                        dayMatch.home.shortName === TEAM_ZHAIYQ.shortName);
+                    const opponentLogo =
+                      dayMatch && (isZhaiyqHome ? dayMatch.away.logoUrl : dayMatch.home.logoUrl);
                     return (
                       <button
                         key={ymd}
@@ -231,25 +237,29 @@ export default function CalendarGridSheet({ open, onClose }: Props) {
                         }`}
                         aria-pressed={selected}
                         aria-label={
-                          match ? `${day} ${match.opponent} — матч` : `${day} число, без матча`
+                          dayMatch
+                            ? `${day} — матч с ${isZhaiyqHome ? dayMatch.away.fullName : dayMatch.home.fullName}`
+                            : match
+                              ? `${day} ${match.opponent} — матч`
+                              : `${day} число, без матча`
                         }
                       >
-                        <span className="relative z-0 text-[16px] font-semibold tabular-nums text-white/45">
-                          {day}
-                        </span>
-                        {match && !hasLogo ? (
-                          <span className="relative z-0 mt-0.5 px-0.5 text-center text-[9px] font-semibold leading-tight text-white/70 line-clamp-2">
-                            {match.opponent}
+                        {dayMatch ? (
+                          <div className="absolute inset-0 flex items-center justify-center bg-[#0F172A] rounded-lg">
+                            {opponentLogo ? (
+                              // eslint-disable-next-line @next/next/no-img-element -- external / local logo URLs
+                              <img
+                                src={opponentLogo}
+                                alt="Opponent"
+                                className="w-7 h-7 object-contain drop-shadow-[0_0_8px_rgba(0,240,255,0.4)]"
+                              />
+                            ) : null}
+                          </div>
+                        ) : (
+                          <span className="relative z-0 text-[16px] font-semibold tabular-nums text-white/45">
+                            {day}
                           </span>
-                        ) : null}
-                        {hasLogo ? (
-                          // eslint-disable-next-line @next/next/no-img-element -- external / local logo URLs
-                          <img
-                            src={opponentLogoUrl}
-                            alt=""
-                            className="pointer-events-none mt-1 w-7 h-7 object-contain"
-                          />
-                        ) : null}
+                        )}
                       </button>
                     );
                   })}

@@ -58,19 +58,17 @@ export default function MatchScheduleCountdown({ target }: Props) {
   ];
 
   return (
-    <div className="flex min-w-0 flex-wrap items-end justify-center gap-0.5 sm:gap-1">
+    <div className="flex items-center gap-1.5">
       {cells.map((c, i) => (
         <Fragment key={c.label}>
           {i > 0 ? (
-            <span aria-hidden className="text-white/30 text-xl font-bold pb-4">
+            <span aria-hidden className="text-white/30 font-bold mb-2 text-lg">
               :
             </span>
           ) : null}
-          <div className="flex h-14 w-11 flex-col items-center justify-center rounded-xl border border-white/10 bg-white/5 backdrop-blur-md shadow-lg">
-            <span className="text-xl font-black text-white tabular-nums">{c.value}</span>
-            <span className="mt-0.5 text-[9px] uppercase tracking-widest text-white/50">
-              {c.label}
-            </span>
+          <div className="flex flex-col items-center justify-center w-10 h-12 bg-white/10 border border-white/5 rounded-lg backdrop-blur-md">
+            <span className="text-lg font-bold text-white">{c.value}</span>
+            <span className="text-[8px] uppercase text-white/50">{c.label}</span>
           </div>
         </Fragment>
       ))}

@@ -43,7 +43,7 @@ export default function Countdown({ target }: Props) {
 
   if (segments.done) {
     return (
-      <div className="flex items-center justify-center rounded-2xl border border-accent/30 bg-accent/10 px-4 py-3 text-sm font-medium text-accent">
+      <div className="neon-cyan flex items-center justify-center rounded-2xl border border-accent/35 bg-accent/10 px-4 py-3 text-sm font-semibold text-accent">
         Матч уже идёт — болеем за наших!
       </div>
     );
@@ -61,7 +61,7 @@ export default function Countdown({ target }: Props) {
       {cells.map((c) => (
         <div
           key={c.label}
-          className="flex flex-col items-center justify-center rounded-xl border border-white/5 bg-white/[0.04] py-2.5"
+          className="flex flex-col items-center justify-center rounded-xl border border-white/10 bg-white/[0.05] py-2.5 backdrop-blur-xl"
         >
           <span className="font-mono text-xl font-semibold tabular-nums text-foreground">
             {c.value}

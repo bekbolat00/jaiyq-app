@@ -79,22 +79,20 @@ export default function BottomTabBar() {
             >
               <span
                 className={`flex h-9 w-9 items-center justify-center rounded-xl transition-all ${
-                  isActive
-                    ? "text-accent [filter:drop-shadow(0_0_10px_rgba(0,240,255,0.6))]"
-                    : "text-muted"
+                  isActive ? "neon-cyan text-accent" : "text-muted"
                 }`}
               >
                 {tab.icon}
               </span>
               <span
                 className={`text-[11px] font-medium tracking-wide transition-colors ${
-                  isActive ? "text-accent" : "text-muted"
+                  isActive ? "neon-cyan text-accent" : "text-muted"
                 }`}
               >
                 {tab.label}
               </span>
               {isActive && (
-                <span className="absolute -top-1 h-1 w-8 rounded-full bg-accent shadow-[0_0_14px_2px_rgba(0,240,255,0.6)]" />
+                <span className="neon-cyan absolute -top-1 h-1 w-8 rounded-full bg-accent shadow-[0_0_14px_2px_rgba(0,240,255,0.6)]" />
               )}
             </Link>
           );

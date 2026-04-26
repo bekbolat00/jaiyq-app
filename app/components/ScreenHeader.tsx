@@ -8,11 +8,11 @@ export default function ScreenHeader({ eyebrow, title, subtitle }: Props) {
   return (
     <header className="mb-5 mt-3">
       {eyebrow && (
-        <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-accent">
+        <p className="neon-cyan text-[11px] font-bold uppercase tracking-[0.22em] text-accent">
           {eyebrow}
         </p>
       )}
-      <h1 className="mt-1 text-[26px] font-semibold leading-tight text-foreground">
+      <h1 className="mt-2 max-w-full text-balance text-[clamp(2.25rem,10.5vw,3.35rem)] font-black uppercase leading-[0.92] tracking-[0.2em] text-foreground">
         {title}
       </h1>
       {subtitle && (

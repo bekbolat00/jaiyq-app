@@ -1,7 +1,10 @@
 import type { Metadata, Viewport } from "next";
+import Script from "next/script";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import BottomTabBar from "./components/BottomTabBar";
+import AppShell from "./components/AppShell";
+import TelegramAuth from "./components/TelegramAuth";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -19,7 +22,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0b132b",
+  themeColor: "#020408",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
@@ -36,11 +39,25 @@ export default function RootLayout({
       lang="ru"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
+      <head>
+        <Script
+          src="https://telegram.org/js/telegram-web-app.js"
+          strategy="beforeInteractive"
+        />
+      </head>
       <body className="min-h-full text-foreground">
-        <div className="mx-auto flex min-h-dvh w-full max-w-[480px] flex-col">
-          <main className="safe-top safe-bottom flex-1 px-4">{children}</main>
-          <BottomTabBar />
-        </div>
+        <TelegramAuth />
+        <AppShell>
+          <div className="bg-depth-orbs" aria-hidden>
+            <span className="bg-orb" />
+            <span className="bg-orb" />
+            <span className="bg-orb" />
+          </div>
+          <div className="relative z-10 mx-auto flex min-h-dvh w-full max-w-[480px] flex-col">
+            <main className="safe-top safe-bottom flex-1 px-4">{children}</main>
+            <BottomTabBar />
+          </div>
+        </AppShell>
       </body>
     </html>
   );

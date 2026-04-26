@@ -21,7 +21,7 @@ export default function QrCode({ value, size = 160, gridSize = 25 }: Props) {
 
   return (
     <div
-      className="relative overflow-hidden rounded-2xl bg-white p-2 shadow-[0_0_0_1px_rgba(0,240,255,0.35),0_0_28px_-2px_rgba(0,240,255,0.55),inset_0_0_0_2px_rgba(255,255,255,0.6)]"
+      className="neon-cyan relative overflow-hidden rounded-2xl bg-white p-2 shadow-[0_0_0_1px_rgba(0,240,255,0.45),0_0_32px_-2px_rgba(0,240,255,0.6),inset_0_0_0_2px_rgba(255,255,255,0.65)]"
       style={{ width: size, height: size }}
       aria-label={`QR код ${value}`}
     >
@@ -35,7 +35,7 @@ export default function QrCode({ value, size = 160, gridSize = 25 }: Props) {
                 y={y * cellSize}
                 width={cellSize}
                 height={cellSize}
-                fill="#04111a"
+                fill="#020408"
               />
             ) : null,
           ),

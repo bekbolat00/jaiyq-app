@@ -1,16 +1,16 @@
 @import "tailwindcss";
 
 :root {
-  --background: #060a14;
-  --background-soft: #0b132b;
-  --surface: #16204a;
-  --surface-2: #1c2858;
+  --background: #020408;
+  --background-soft: #050a12;
+  --surface: #0a1220;
+  --surface-2: #0e1830;
   --foreground: #f5f7ff;
-  --muted: #a4afd1;
-  --border: rgba(255, 255, 255, 0.08);
+  --muted: #8b98b8;
+  --border: rgba(255, 255, 255, 0.1);
   --accent: #00f0ff;
   --accent-strong: #00ffff;
-  --accent-shadow: rgba(0, 240, 255, 0.45);
+  --accent-shadow: rgba(0, 240, 255, 0.5);
   --danger: #ff4d6d;
 }
 
@@ -39,61 +39,153 @@ body {
     "Segoe UI", Roboto, sans-serif;
 }
 
-body {
-  background-image:
-    radial-gradient(
-      ellipse 80% 50% at 50% -10%,
-      rgba(0, 240, 255, 0.12),
-      transparent 60%
-    ),
-    radial-gradient(
-      ellipse 60% 50% at 100% 110%,
-      rgba(0, 240, 255, 0.08),
-      transparent 60%
-    );
-  background-attachment: fixed;
+h1,
+h2,
+h3 {
+  font-weight: 700;
 }
 
-/* Glassmorphism utility */
+body {
+  position: relative;
+  background-color: #020408;
+  min-height: 100dvh;
+}
+
+/* Slow depth field — huge blurred cyan orbs (under content, see layout) */
+.bg-depth-orbs {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.bg-depth-orbs .bg-orb {
+  position: absolute;
+  width: min(140vw, 920px);
+  height: min(140vw, 920px);
+  border-radius: 50%;
+  background: #00f0ff;
+  opacity: 0.1;
+  filter: blur(120px);
+  will-change: transform;
+}
+
+.bg-depth-orbs .bg-orb:nth-child(1) {
+  left: -25%;
+  top: -15%;
+  animation: bg-orb-float-a 28s ease-in-out infinite;
+}
+
+.bg-depth-orbs .bg-orb:nth-child(2) {
+  right: -30%;
+  top: 20%;
+  width: min(120vw, 780px);
+  height: min(120vw, 780px);
+  animation: bg-orb-float-b 34s ease-in-out infinite;
+}
+
+.bg-depth-orbs .bg-orb:nth-child(3) {
+  left: 5%;
+  bottom: -25%;
+  width: min(130vw, 820px);
+  height: min(130vw, 820px);
+  animation: bg-orb-float-c 31s ease-in-out infinite;
+}
+
+@keyframes bg-orb-float-a {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(8%, 12%) scale(1.08);
+  }
+}
+
+@keyframes bg-orb-float-b {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1.05);
+  }
+  50% {
+    transform: translate(-10%, 8%) scale(1);
+  }
+}
+
+@keyframes bg-orb-float-c {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(12%, -10%) scale(1.06);
+  }
+}
+
+/** Neon glow for accent #00F0FF (text, icons, strokes) */
+.neon-cyan {
+  filter: drop-shadow(0 0 4px #00f0ff) drop-shadow(0 0 12px rgba(0, 240, 255, 0.55))
+    drop-shadow(0 0 24px rgba(0, 240, 255, 0.25));
+}
+
+/** Solid / surface accent glow */
+.neon-cyan-surface {
+  box-shadow:
+    0 0 16px rgba(0, 240, 255, 0.45),
+    0 0 32px rgba(0, 240, 255, 0.2),
+    0 0 0 1px rgba(0, 240, 255, 0.15);
+}
+
+/* Glassmorphism — hard frosted panels */
 .glass {
-  background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.045) 0%,
-    rgba(255, 255, 255, 0.02) 100%
-  );
-  border: 1px solid var(--border);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(40px);
+  -webkit-backdrop-filter: blur(40px);
 }
 
 .glass-strong {
-  background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.08) 0%,
-    rgba(255, 255, 255, 0.03) 100%
-  );
+  background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(40px);
+  -webkit-backdrop-filter: blur(40px);
+  box-shadow: 0 24px 80px -32px rgba(0, 0, 0, 0.85);
 }
 
 /* Premium glass for high-value cards (players, tickets) */
 .glass-premium {
-  background: rgba(11, 19, 43, 0.4);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(0, 240, 255, 0.1);
+  position: relative;
+  background: linear-gradient(
+      165deg,
+      rgba(255, 255, 255, 0.08) 0%,
+      rgba(255, 255, 255, 0.03) 42%,
+      rgba(255, 255, 255, 0.02) 100%
+    ),
+    rgba(6, 12, 22, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(64px);
+  -webkit-backdrop-filter: blur(64px);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.16),
+    inset 0 0 48px -24px rgba(255, 255, 255, 0.06),
+    inset 0 -1px 0 0 rgba(0, 0, 0, 0.2),
+    0 0 0 1px rgba(255, 255, 255, 0.04);
 }
 
 .accent-glow {
-  box-shadow: 0 10px 40px -10px var(--accent-shadow);
+  box-shadow:
+    0 10px 40px -10px var(--accent-shadow),
+    0 0 24px rgba(0, 240, 255, 0.35);
+  filter: drop-shadow(0 0 10px rgba(0, 240, 255, 0.45));
 }
 
 .accent-glow-strong {
   box-shadow:
     0 0 0 1px rgba(0, 240, 255, 0.25),
-    0 0 24px -2px rgba(0, 240, 255, 0.55),
+    0 0 28px rgba(0, 240, 255, 0.55),
     0 20px 60px -20px rgba(0, 240, 255, 0.35);
+  filter: drop-shadow(0 0 14px rgba(0, 240, 255, 0.5));
 }
 
 /* Hide scrollbars for a cleaner mobile feel */
@@ -105,20 +197,63 @@ body {
   scrollbar-width: none;
 }
 
-/* Diagonal stamp overlay for archived tickets */
-.ticket-stamp {
-  color: rgba(255, 77, 109, 0.85);
-  border: 4px solid rgba(255, 77, 109, 0.75);
-  padding: 6px 18px;
-  border-radius: 8px;
-  font-weight: 800;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  transform: rotate(-14deg);
-  text-shadow: 0 2px 12px rgba(255, 77, 109, 0.35);
-  box-shadow: inset 0 0 0 2px rgba(255, 77, 109, 0.15);
-  backdrop-filter: blur(2px);
-  opacity: 0.9;
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Invisible hit area for custom neon sliders; visible thumb is drawn separately. */
+input[type="range"].range-neon {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  outline: none;
+  opacity: 0.01;
+  color: transparent;
+  touch-action: none;
+}
+input[type="range"].range-neon:focus-visible {
+  outline: 1px solid rgba(0, 240, 255, 0.4);
+  outline-offset: 2px;
+  border-radius: 4px;
+  opacity: 0.2;
+}
+input[type="range"].range-neon::-webkit-slider-runnable-track {
+  height: 0.5rem;
+  background: transparent;
+  border: none;
+}
+input[type="range"].range-neon::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 2.5rem;
+  height: 2.5rem;
+  margin-top: -0.5rem;
+  border-radius: 9999px;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  cursor: grab;
+}
+input[type="range"].range-neon::-moz-range-track {
+  background: transparent;
+  border: none;
+}
+input[type="range"].range-neon::-moz-range-thumb {
+  width: 2.5rem;
+  height: 2.5rem;
+  border: none;
+  background: transparent;
+  border-radius: 9999px;
+  cursor: grab;
+}
+input[type="range"].range-neon:active::-webkit-slider-thumb {
+  cursor: grabbing;
+}
+input[type="range"].range-neon:active::-moz-range-thumb {
+  cursor: grabbing;
 }
 
 /* Subtle safe-area padding for Telegram WebApp */

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import ScreenHeader from "../components/ScreenHeader";
+import TabEnterMotion from "../components/TabEnterMotion";
 import ProductCard from "../components/ProductCard";
 import { PRODUCTS } from "@/lib/data/mock";
 import type { Product } from "@/lib/types";
@@ -14,14 +15,14 @@ export default function ShopPage() {
   };
 
   return (
-    <div className="flex flex-col gap-5">
+    <TabEnterMotion className="flex flex-col gap-5">
       <ScreenHeader
-        eyebrow="Магазин"
-        title="Официальный мерч"
+        eyebrow="Официальный мерч"
+        title="Магазин"
         subtitle="Джерси, аксессуары, лимитированные коллекции"
       />
 
-      <div className="flex items-center justify-between rounded-2xl border border-white/[0.06] bg-white/[0.02] px-4 py-3">
+      <div className="glass flex items-center justify-between rounded-2xl px-4 py-3">
         <div>
           <p className="text-[12px] text-muted">Корзина</p>
           <p className="text-[15px] font-semibold text-foreground">
@@ -30,7 +31,7 @@ export default function ShopPage() {
         </div>
         <button
           type="button"
-          className="rounded-xl border border-accent/40 bg-accent/10 px-4 py-2 text-[13px] font-semibold text-accent transition-colors hover:bg-accent/20"
+          className="neon-cyan rounded-xl border border-accent/45 bg-accent/10 px-4 py-2 text-[13px] font-bold text-accent transition-colors hover:bg-accent/20"
         >
           Оформить
         </button>
@@ -41,7 +42,7 @@ export default function ShopPage() {
           <ProductCard key={p.id} product={p} onAddToCart={handleAdd} />
         ))}
       </div>
-    </div>
+    </TabEnterMotion>
   );
 }
 

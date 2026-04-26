@@ -14,7 +14,7 @@ export default function TalentBanner({
   return (
     <Link
       href={href}
-      className="group relative block overflow-hidden rounded-3xl bg-gradient-to-br from-[#00f0ff] via-[#0bd3ff] to-[#0086ff] p-[1px] shadow-[0_18px_50px_-18px_rgba(0,240,255,0.55)] transition-transform active:scale-[0.99]"
+      className="neon-cyan-surface group relative block overflow-hidden rounded-3xl bg-gradient-to-br from-[#00f0ff] via-[#0bd3ff] to-[#0086ff] p-[1px] shadow-[0_18px_56px_-14px_rgba(0,240,255,0.65),0_0_40px_-8px_rgba(0,240,255,0.35)] transition-transform active:scale-[0.99]"
     >
       <div className="relative flex items-center justify-between gap-4 rounded-[23px] bg-gradient-to-br from-[#00f0ff] via-[#0bd3ff] to-[#0086ff] px-5 py-4 text-[#052026]">
         <div className="absolute inset-y-0 right-0 w-1/2 opacity-30 mix-blend-overlay">
@@ -33,13 +33,13 @@ export default function TalentBanner({
           <p className="text-[11px] font-semibold uppercase tracking-[0.16em] opacity-80">
             Академия
           </p>
-          <h3 className="mt-1 text-[17px] font-semibold leading-tight">
+          <h3 className="mt-1 text-[17px] font-bold leading-tight">
             {title}
           </h3>
           <p className="mt-0.5 text-[13px] opacity-90">{subtitle}</p>
         </div>
 
-        <div className="relative flex h-10 w-10 items-center justify-center rounded-full bg-[#04111a] text-accent transition-transform group-hover:translate-x-0.5">
+        <div className="neon-cyan relative flex h-10 w-10 items-center justify-center rounded-full bg-[#020408] text-accent transition-transform group-hover:translate-x-0.5">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
             <path d="M5 12h14" />
             <path d="m13 6 6 6-6 6" />

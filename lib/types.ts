@@ -8,6 +8,8 @@ export type Player = {
   position: string;
   squad: Squad;
   photoUrl: string;
+  /** ДД.ММ.ГГГГ */
+  birthDate: string;
   stats: {
     heightCm: number;
     weightKg: number;
@@ -32,6 +34,8 @@ export type Match = {
   venue: string;
   competition: string;
   ticketUrl?: string;
+  /** Итог для прошедших матчей (кнопка «О матче» / матч-центр). */
+  finalScore?: { home: number; away: number };
 };
 
 export type Product = {
@@ -61,6 +65,8 @@ export type Ticket = {
   status: "active" | "archived";
   backgroundUrl?: string;
   finalScore?: { home: number; away: number };
+  /** false — в матче Жайык играл в гостях (счёт в билете: «Жайык — соперник»). */
+  zhaiyqPlayedHome?: boolean;
   goals?: GoalEvent[];
 };
 
@@ -69,4 +75,47 @@ export type UserProfile = {
   displayName: string;
   avatarUrl?: string;
   pushAwayMatches: boolean;
+  /** Соц. стата (Instagram-стиль в шапке профиля) */
+  followersCount?: number;
+  followingCount?: number;
+};
+
+/** Карточка новости в ленте на главной */
+export type NewsFeedItem = {
+  id: string;
+  title: string;
+  description: string;
+  date: string;
+  imageUrl: string;
+  likesCount: number;
+  isLiked: boolean;
+};
+
+/** Уведомления Social Hub (мок) */
+export type AppNotification = {
+  id: string;
+  text: string;
+  /** Подсветка как у «новых» */
+  isNew: boolean;
+  /** Буква в круге слева (как в VIBE) */
+  initial: string;
+  /** Цвет маркера */
+  tone: "orange" | "cyan";
+  /** Дата в формате ДД.ММ.ГГГГ */
+  date: string;
+};
+
+/**
+ * Друг для приглашений на матч: PRO или ранг, публичная витрина.
+ */
+export type SocialFriend = {
+  id: string;
+  name: string;
+  avatarUrl?: string;
+  /** true — бейдж PRO, иначе отображаем `rankLabel` */
+  isPro: boolean;
+  rankLabel: string;
+  followersCount: number;
+  /** «Посетил N матчей клуба» */
+  clubMatchesAttended: number;
 };

@@ -20,7 +20,7 @@ export default function SquadTabs({ value, onChange }: Props) {
     >
       <span
         aria-hidden
-        className={`absolute inset-y-1 w-[calc(50%-4px)] rounded-xl bg-accent/15 ring-1 ring-accent/40 transition-transform duration-300 ease-out ${
+        className={`absolute inset-y-1 w-[calc(50%-4px)] rounded-xl bg-accent/15 shadow-[0_0_20px_-4px_rgba(0,240,255,0.45)] ring-1 ring-accent/45 transition-transform duration-300 ease-out ${
           value === "main" ? "translate-x-1" : "translate-x-[calc(100%+3px)]"
         }`}
       />
@@ -33,8 +33,8 @@ export default function SquadTabs({ value, onChange }: Props) {
             role="tab"
             aria-selected={active}
             onClick={() => onChange(opt.id)}
-            className={`relative z-10 h-10 rounded-xl text-[13px] font-medium transition-colors ${
-              active ? "text-accent" : "text-muted"
+            className={`relative z-10 h-10 rounded-xl text-[13px] font-semibold transition-colors ${
+              active ? "neon-cyan text-accent" : "text-muted"
             }`}
           >
             {opt.label}

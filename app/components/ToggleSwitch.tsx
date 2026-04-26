@@ -39,7 +39,7 @@ export default function ToggleSwitch({
         }}
         className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors ${
           checked
-            ? "bg-accent/80 shadow-[0_0_12px_rgba(0,240,255,0.45)]"
+            ? "bg-accent/85 shadow-[0_0_14px_rgba(0,240,255,0.55),0_0_28px_rgba(0,240,255,0.28)]"
             : "bg-white/10"
         }`}
       >
@@ -50,7 +50,7 @@ export default function ToggleSwitch({
           onChange={(e) => onChange(e.target.checked)}
         />
         <span
-          className={`inline-block h-5 w-5 transform rounded-full bg-[#04111a] shadow transition-transform ${
+          className={`inline-block h-5 w-5 transform rounded-full bg-[#020408] shadow transition-transform ${
             checked ? "translate-x-6" : "translate-x-1"
           }`}
         />

@@ -9,12 +9,12 @@ type Props = {
 
 export default function ProductCard({ product, onAddToCart }: Props) {
   return (
-    <article className="flex flex-col overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02]">
+    <article className="glass-premium flex flex-col overflow-hidden rounded-2xl">
       <div className="relative aspect-square w-full overflow-hidden bg-gradient-to-br from-white/[0.06] to-transparent">
         <div className="absolute inset-0 flex items-center justify-center text-white/15">
           <ProductIcon category={product.category} />
         </div>
-        <span className="absolute left-3 top-3 rounded-md bg-black/40 px-2 py-0.5 font-mono text-[10px] uppercase tracking-widest text-accent backdrop-blur">
+        <span className="neon-cyan absolute left-3 top-3 rounded-md border border-white/10 bg-black/50 px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-widest text-accent backdrop-blur-md">
           {labelForCategory(product.category)}
         </span>
       </div>
@@ -36,7 +36,7 @@ export default function ProductCard({ product, onAddToCart }: Props) {
           <button
             type="button"
             onClick={() => onAddToCart?.(product)}
-            className="inline-flex items-center gap-1 rounded-xl border border-accent/40 bg-accent/10 px-3 py-1.5 text-[12px] font-semibold text-accent transition-colors hover:bg-accent/20"
+            className="neon-cyan inline-flex items-center gap-1 rounded-xl border border-accent/45 bg-accent/10 px-3 py-1.5 text-[12px] font-bold text-accent transition-colors hover:bg-accent/20"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
               <path d="M4 7h16l-1.2 11.2a2 2 0 0 1-2 1.8H7.2a2 2 0 0 1-2-1.8L4 7Z" />

@@ -4,7 +4,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import BottomTabBar from "./components/BottomTabBar";
 import AppShell from "./components/AppShell";
-import MusicToggle from "./components/MusicToggle";
+import MusicPlayerProvider from "./components/MusicPlayerProvider";
 import TelegramAuth from "./components/TelegramAuth";
 
 const geistSans = Geist({
@@ -49,20 +49,19 @@ export default function RootLayout({
       <body className="min-h-full text-foreground">
         <TelegramAuth />
         <AppShell>
-          <div className="bg-depth-orbs" aria-hidden>
-            <span className="bg-orb" />
-            <span className="bg-orb" />
-            <span className="bg-orb" />
-          </div>
-          <div className="relative z-10 mx-auto flex h-dvh min-h-0 w-full max-w-[480px] flex-col">
-            <div className="safe-top flex shrink-0 items-center justify-end px-4 py-1.5">
-              <MusicToggle />
+          <MusicPlayerProvider>
+            <div className="bg-depth-orbs" aria-hidden>
+              <span className="bg-orb" />
+              <span className="bg-orb" />
+              <span className="bg-orb" />
             </div>
-            <main className="safe-bottom min-h-0 flex-1 overflow-y-auto px-4 pb-24 hide-scrollbar">
-              {children}
-            </main>
-            <BottomTabBar />
-          </div>
+            <div className="relative z-10 mx-auto flex h-dvh min-h-0 w-full max-w-[480px] flex-col">
+              <main className="safe-top safe-bottom min-h-0 flex-1 overflow-y-auto px-4 pb-24 hide-scrollbar">
+                {children}
+              </main>
+              <BottomTabBar />
+            </div>
+          </MusicPlayerProvider>
         </AppShell>
       </body>
     </html>

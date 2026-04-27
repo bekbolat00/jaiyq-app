@@ -5,11 +5,7 @@ import {
   type LineBlock,
   type LinePlayerRow,
 } from "@/lib/matches/matchDetailFromDb";
-import {
-  formationLabelFromStarters,
-  getCoordinates,
-  groupStartersByFieldLine,
-} from "@/lib/matches/formationLayout";
+import { formationLabelFromStarters } from "@/lib/matches/formationLayout";
 import type { Team } from "@/lib/types";
 
 type PitchPlaced = LinePlayerRow & {
@@ -23,25 +19,63 @@ function pitchSurnameLabel(p: LinePlayerRow): string {
   return s.toUpperCase();
 }
 
-/** Хозяева — у ворот сверху (`fromTopGoal`), гости — снизу. */
+const POSITION_LINE: Record<string, number> = {
+  вр: 0,
+  gk: 0,
+  зщ: 1,
+  cb: 1,
+  lb: 1,
+  rb: 1,
+  wb: 1,
+  пз: 2,
+  cm: 2,
+  cdm: 2,
+  cam: 2,
+  lm: 2,
+  rm: 2,
+  нп: 3,
+  cf: 3,
+  lw: 3,
+  rw: 3,
+  st: 3,
+  "главный тренер": 2,
+  "помощник тренера": 2,
+};
+
+/** Хозяева — у ворот сверху (`fromTop`), гости — снизу. */
 function placeTeamOnPitch(
-  starters: LinePlayerRow[],
-  fromTopGoal: boolean,
+  players: LinePlayerRow[],
+  fromTop: boolean,
   kitColor: string,
 ): PitchPlaced[] {
-  const groups = groupStartersByFieldLine(starters);
-  const out: PitchPlaced[] = [];
-  const keys: Array<"вр" | "зщ" | "пз" | "нп"> = ["вр", "зщ", "пз", "нп"];
-  for (const k of keys) {
-    const row = (groups.get(k) ?? []) as LinePlayerRow[];
-    const n = row.length;
-    for (let i = 0; i < n; i++) {
-      const pl = row[i]!;
-      const coord = getCoordinates(k, i, n, fromTopGoal);
-      out.push({ ...pl, ...coord, kitColor });
-    }
+  // Группируем по линиям
+  const lines: Record<number, LinePlayerRow[]> = { 0: [], 1: [], 2: [], 3: [] };
+  for (const p of players) {
+    const pos = (p.pos ?? "").toLowerCase().trim();
+    const line =
+      POSITION_LINE[pos] ??
+      (pos === "вр" ? 0 : pos === "зщ" ? 1 : pos === "пз" ? 2 : 3);
+    lines[line].push(p);
   }
-  return out;
+
+  // top% для каждой линии
+  // fromTop=true: хозяева сверху (вр=8%, зщ=24%, пз=45%, нп=65%)
+  // fromTop=false: гости снизу (вр=92%, зщ=76%, пз=55%, нп=35%)
+  const topByLine = fromTop ? [8, 24, 45, 65] : [92, 76, 55, 35];
+
+  const result: PitchPlaced[] = [];
+  for (const lineIdx of [0, 1, 2, 3]) {
+    const group = lines[lineIdx];
+    if (!group.length) continue;
+    const top = topByLine[lineIdx]!;
+    group.forEach((p, i) => {
+      // Равномерно по горизонтали: отступ 10% с каждой стороны
+      const left =
+        group.length === 1 ? 50 : 10 + (i / (group.length - 1)) * 80;
+      result.push({ ...p, top: `${top}%`, left: `${left}%`, kitColor });
+    });
+  }
+  return result;
 }
 
 function JerseyIcon({ fill, num }: { fill: string; num: string }) {

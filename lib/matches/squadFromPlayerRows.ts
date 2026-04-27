@@ -12,7 +12,10 @@ const COACH_POSITIONS = new Set([
 ]);
 
 function isCoachByPosition(pos: string): boolean {
-  return COACH_POSITIONS.has(pos.trim());
+  const t = pos.trim();
+  if (COACH_POSITIONS.has(t)) return true;
+  // Как в SQL: position ILIKE '%тренер%'
+  return /тренер/i.test(t);
 }
 
 export function isFieldLineRole(

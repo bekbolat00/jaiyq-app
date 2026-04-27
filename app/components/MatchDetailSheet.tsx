@@ -70,6 +70,13 @@ function opponentTeamFromRow(row: DbMatchRow): Team {
 const DEFAULT_HOME_KIT = "#00AEEF";
 const DEFAULT_AWAY_KIT = "#F5C518";
 
+function isZhaiyqByTeamRow(
+  row: Pick<DbTeamRow, "short_name" | "full_name" | "slug">,
+) {
+  const a = (row.short_name + row.full_name + (row.slug ?? "")).toLowerCase();
+  return a.includes("жай") || a.includes("zhaiyq");
+}
+
 function kitColorsForMatch(
   teams: DbTeamRow[],
   matchHomeTeamId: string,
@@ -150,9 +157,37 @@ export default function MatchDetailSheet({ open, onClose, matchId }: Props) {
       const mvm = buildMatchDetailViewModel(match, teams);
       let homeSquad = mvm.homeSquad;
       let awaySquad = mvm.awaySquad;
-      const homeTeamId = match.home_team_id?.trim() || mvm.homeId || "";
-      const awayTeamId = match.away_team_id?.trim() || mvm.awayId || "";
-      const kits = kitColorsForMatch(teams, homeTeamId, awayTeamId);
+      let homeTeamId = match.home_team_id?.trim() || mvm.homeId || "";
+      let awayTeamId = match.away_team_id?.trim() || mvm.awayId || "";
+
+      if (!homeTeamId || !awayTeamId) {
+        const { data: tAll, error: tErr } = await supabase
+          .from("teams")
+          .select("*");
+        const trows = (tAll ?? []) as DbTeamRow[];
+        if (!tErr && trows.length >= 2) {
+          const z = trows.find((t) => isZhaiyqByTeamRow(t)) ?? trows[0]!;
+          const oth = trows.find((t) => t.id !== z.id) ?? trows[1]!;
+          if (match.is_home) {
+            homeTeamId = z.id;
+            awayTeamId = oth.id;
+          } else {
+            homeTeamId = oth.id;
+            awayTeamId = z.id;
+          }
+        }
+      }
+
+      const kitSource =
+        homeTeamId && awayTeamId
+          ? ((
+              await supabase
+                .from("teams")
+                .select("*")
+                .in("id", [homeTeamId, awayTeamId])
+            ).data ?? []) as DbTeamRow[]
+          : teams;
+      const kits = kitColorsForMatch(kitSource, homeTeamId, awayTeamId);
       setPitchKits({ home: kits.homeKit, away: kits.awayKit });
 
       const teamIdsForPlayers = [...new Set([homeTeamId, awayTeamId].filter(Boolean))];

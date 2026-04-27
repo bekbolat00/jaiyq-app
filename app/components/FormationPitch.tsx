@@ -148,7 +148,7 @@ function SquadListColumn({
         {block.starters.length ? (
           block.starters.map((p) => <Row key={p.id} p={p} />)
         ) : (
-          <li className="text-[10px] text-white/30">Состав уточняется</li>
+          <li className="text-[10px] text-white/30">—</li>
         )}
       </ul>
       <p className="mb-1.5 mt-3 text-[8px] font-black uppercase tracking-[0.2em] text-white/40">
@@ -203,7 +203,11 @@ export default function FormationPitch({
 
   return (
     <div className="w-full">
-      <div className="relative mt-4 aspect-[3/4] w-full overflow-hidden rounded-xl border-2 border-white/18 bg-[#1a3a2a] shadow-[inset_0_0_40px_rgba(0,0,0,0.35)]">
+      <div className="relative mt-4 aspect-[2/3] w-full min-h-[500px] overflow-hidden rounded-xl border-2 border-white/18 bg-[#0d2416] shadow-[inset_0_0_40px_rgba(0,0,0,0.35)]">
+        <div
+          className="pointer-events-none absolute inset-0 z-[1] rounded-xl bg-black/20"
+          aria-hidden
+        />
         {/* Верх: хозяева — шапка слева, схема справа */}
         <div className="pointer-events-none absolute left-2 top-2 z-20 flex max-w-[55%] items-start gap-2">
           {home.logoUrl ? (
@@ -256,8 +260,8 @@ export default function FormationPitch({
           </div>
         </div>
 
-        <div className="absolute inset-x-2 top-[22%] bottom-[22%] rounded-md border border-white/20">
-          <div className="relative h-full w-full">
+        <div className="absolute inset-x-2 top-[22%] bottom-[22%] z-[2] rounded-md border border-white/20">
+          <div className="relative z-[2] h-full w-full">
             <div className="pointer-events-none absolute inset-0" aria-hidden>
               <div className="absolute top-1/2 w-full border-t border-white/22" />
               <div className="absolute top-1/2 left-1/2 h-14 w-14 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/22" />

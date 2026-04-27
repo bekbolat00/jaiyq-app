@@ -1,7 +1,11 @@
 "use client";
 
 import type { LineBlock, LinePlayerRow } from "@/lib/matches/matchDetailFromDb";
-import { getCoordinates, groupStartersByFieldLine } from "@/lib/matches/formationLayout";
+import {
+  formationLabelFromStarters,
+  getCoordinates,
+  groupStartersByFieldLine,
+} from "@/lib/matches/formationLayout";
 import type { Team } from "@/lib/types";
 
 type PitchPlaced = LinePlayerRow & { top: string; left: string; zhai: boolean };
@@ -27,12 +31,7 @@ function placeTeamOnPitch(
 ): PitchPlaced[] {
   const groups = groupStartersByFieldLine(starters);
   const out: PitchPlaced[] = [];
-  const keys: Array<"вр" | "зщ" | "пз" | "нп"> = [
-    "вр",
-    "зщ",
-    "пз",
-    "нп",
-  ];
+  const keys: Array<"вр" | "зщ" | "пз" | "нп"> = ["вр", "зщ", "пз", "нп"];
   for (const k of keys) {
     const row = (groups.get(k) ?? []) as LinePlayerRow[];
     const n = row.length;
@@ -60,18 +59,20 @@ function PlayerChip({
 }) {
   return (
     <div
-      className="absolute -translate-x-1/2 -translate-y-1/2"
+      className="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2"
       style={{ top, left }}
     >
-      <div className="flex flex-col items-center">
+      <div className="relative flex flex-col items-center">
+        <span className="mb-0.5 text-[9px] font-black tabular-nums leading-none text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.85)]">
+          {num}
+        </span>
         <div
-          className={`flex h-6 w-6 items-center justify-center rounded-full border border-white/30 text-[10px] font-bold text-white shadow-md ${
+          className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-white/35 text-[10px] font-bold text-white shadow-[0_2px_8px_rgba(0,0,0,0.45)] ${
             isZhaiyq ? "bg-cyan-600" : "bg-rose-600"
           }`}
-        >
-          {num}
-        </div>
-        <span className="mt-0.5 whitespace-nowrap rounded bg-black/60 px-1 text-[8px] text-white">
+          aria-hidden
+        />
+        <span className="mt-0.5 max-w-[4.5rem] truncate text-center text-[7px] font-bold uppercase leading-tight tracking-tight text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.85)]">
           {surname}
         </span>
       </div>
@@ -161,37 +162,71 @@ export default function FormationPitch({
   const aZh = isZhayykName(away.shortName);
   const homePlaced = placeTeamOnPitch(homeSquad.starters, false, hZh);
   const awayPlaced = placeTeamOnPitch(awaySquad.starters, true, aZh);
+  const homeFormation = formationLabelFromStarters(homeSquad.starters);
+  const awayFormation = formationLabelFromStarters(awaySquad.starters);
 
   return (
     <div className="w-full">
-      <div className="relative mt-4 aspect-[3/4] w-full overflow-hidden rounded-lg border-2 border-white/20 bg-emerald-900 shadow-inner">
-        <div className="pointer-events-none absolute inset-0" aria-hidden>
-          <div className="absolute top-1/2 w-full border-t-2 border-white/25" />
-          <div className="absolute top-1/2 left-1/2 h-16 w-16 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white/25" />
-          <div className="absolute top-0 left-1/2 h-[20%] w-[60%] -translate-x-1/2 border-x-2 border-b-2 border-white/25" />
-          <div className="absolute bottom-0 left-1/2 h-[20%] w-[60%] -translate-x-1/2 border-x-2 border-t-2 border-white/25" />
+      <div className="relative mt-4 aspect-[3/4] w-full overflow-hidden rounded-xl border-2 border-white/18 bg-[#1a3a2a] shadow-[inset_0_0_40px_rgba(0,0,0,0.35)]">
+        <div className="pointer-events-none absolute inset-x-0 top-2 z-20 flex flex-col items-center gap-1">
+          <p className="text-center text-[10px] font-semibold uppercase tracking-[0.2em] text-white">
+            {awayFormation}
+          </p>
+          {away.logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={away.logoUrl}
+              alt=""
+              className="h-9 w-9 object-contain drop-shadow-[0_2px_8px_rgba(0,0,0,0.5)]"
+            />
+          ) : null}
         </div>
 
-        {awayPlaced.map((pl) => (
-          <PlayerChip
-            key={`a-${pl.id}`}
-            num={pl.num}
-            surname={familyLabel(pl.name)}
-            isZhaiyq={pl.zhai}
-            top={pl.top}
-            left={pl.left}
-          />
-        ))}
-        {homePlaced.map((pl) => (
-          <PlayerChip
-            key={`h-${pl.id}`}
-            num={pl.num}
-            surname={familyLabel(pl.name)}
-            isZhaiyq={pl.zhai}
-            top={pl.top}
-            left={pl.left}
-          />
-        ))}
+        <div className="pointer-events-none absolute inset-x-0 bottom-2 z-20 flex flex-col items-center gap-1">
+          <p className="text-center text-[10px] font-semibold uppercase tracking-[0.2em] text-white">
+            {homeFormation}
+          </p>
+          {home.logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={home.logoUrl}
+              alt=""
+              className="h-9 w-9 object-contain drop-shadow-[0_2px_8px_rgba(0,0,0,0.5)]"
+            />
+          ) : null}
+        </div>
+
+        <div className="absolute inset-x-2 top-[4.25rem] bottom-[4.25rem] rounded-md border border-white/20">
+          <div className="relative h-full w-full">
+            <div className="pointer-events-none absolute inset-0" aria-hidden>
+              <div className="absolute top-1/2 w-full border-t border-white/22" />
+              <div className="absolute top-1/2 left-1/2 h-14 w-14 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/22" />
+              <div className="absolute top-0 left-1/2 h-[20%] w-[58%] -translate-x-1/2 border-x border-b border-white/22" />
+              <div className="absolute bottom-0 left-1/2 h-[20%] w-[58%] -translate-x-1/2 border-x border-t border-white/22" />
+            </div>
+
+            {awayPlaced.map((pl) => (
+              <PlayerChip
+                key={`a-${pl.id}`}
+                num={pl.num}
+                surname={familyLabel(pl.name)}
+                isZhaiyq={pl.zhai}
+                top={pl.top}
+                left={pl.left}
+              />
+            ))}
+            {homePlaced.map((pl) => (
+              <PlayerChip
+                key={`h-${pl.id}`}
+                num={pl.num}
+                surname={familyLabel(pl.name)}
+                isZhaiyq={pl.zhai}
+                top={pl.top}
+                left={pl.left}
+              />
+            ))}
+          </div>
+        </div>
       </div>
 
       <div className="mt-5 grid min-h-0 grid-cols-1 gap-4 min-[500px]:grid-cols-2 min-[500px]:gap-5">

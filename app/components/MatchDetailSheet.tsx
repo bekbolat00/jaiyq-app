@@ -8,7 +8,6 @@ import MatchTimeline from "@/app/components/MatchTimeline";
 import TeamBadge from "@/app/components/TeamBadge";
 import {
   fetchMatchWithRelationsById,
-  fetchPlayersForMatchTeams,
   fetchPredictionsStatsForMatch,
   fetchRecentFinishedMatches,
 } from "@/lib/matches/fetchMatchFull";
@@ -18,8 +17,8 @@ import {
   type MatchDetailViewModel,
 } from "@/lib/matches/matchDetailFromDb";
 import { TEAM_ZHAIYQ } from "@/lib/constants/zhaiyq";
-import type { DbMatchRow, Team } from "@/lib/types";
-import { isSupabaseConfigured } from "@/lib/supabaseClient";
+import type { DbMatchRow, DbPlayerRow, Team } from "@/lib/types";
+import { isSupabaseConfigured, supabase } from "@/lib/supabaseClient";
 
 const TABS = [
   { id: "overview" as const, label: "ОБЗОР" },
@@ -131,15 +130,20 @@ export default function MatchDetailSheet({ open, onClose, matchId }: Props) {
       const mvm = buildMatchDetailViewModel(match, teams);
       let homeSquad = mvm.homeSquad;
       let awaySquad = mvm.awaySquad;
-      if (mvm.homeId && mvm.awayId) {
-        const { data: plRows, error: plErr } = await fetchPlayersForMatchTeams(
-          mvm.homeId,
-          mvm.awayId,
-        );
+      const homeTeamId =
+        match.home_team_id?.trim() || mvm.homeId || "";
+      const awayTeamId =
+        match.away_team_id?.trim() || mvm.awayId || "";
+      if (homeTeamId && awayTeamId) {
+        const { data: players, error: plErr } = await supabase
+          .from("players")
+          .select("*")
+          .in("team_id", [homeTeamId, awayTeamId]);
+        const plRows = (players ?? []) as DbPlayerRow[];
         if (!plErr && plRows.length) {
           const split = lineBlocksFromPlayerRows(
-            mvm.homeId,
-            mvm.awayId,
+            homeTeamId,
+            awayTeamId,
             plRows,
             match.match_lineups,
           );

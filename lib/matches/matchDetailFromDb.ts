@@ -40,6 +40,10 @@ export function resolveHomeAwayTeamIds(
   matchRow: DbMatchWithRelations,
   teams: DbTeamRow[],
 ): { homeId: string; awayId: string } | null {
+  const ht = matchRow.home_team_id?.trim();
+  const at = matchRow.away_team_id?.trim();
+  if (ht && at) return { homeId: ht, awayId: at };
+
   if (teams.length < 1) return null;
   const z = teams.find(isZhaiyqTeamName) ?? null;
   if (teams.length < 2 && teams.length > 0) {

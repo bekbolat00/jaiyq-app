@@ -52,3 +52,23 @@ export function groupStartersByFieldLine(
   }
   return m;
 }
+
+/** Подпись схемы над логотипом (по линиям вр/зщ/пз/нп). */
+export function formationLabelFromStarters(
+  starters: LinePlayerRow[],
+): string {
+  const g = groupStartersByFieldLine(starters.slice(0, 11));
+  const nG = (g.get("вр") ?? []).length;
+  const nD = (g.get("зщ") ?? []).length;
+  const nM = (g.get("пз") ?? []).length;
+  const nF = (g.get("нп") ?? []).length;
+  if (nD + nM + nF === 0 && nG === 0) return "—";
+  if (nG > 1) return [nG, nD, nM, nF].filter((n) => n > 0).join("-");
+  if (nD === 4 && nM === 5 && nF === 1) return "4-2-3-1";
+  if (nD === 4 && nM === 4 && nF === 2) return "4-4-2";
+  if (nD === 4 && nM === 3 && nF === 3) return "4-3-3";
+  if (nD === 3 && nM === 5 && nF === 2) return "3-5-2";
+  if (nD === 5 && nM === 3 && nF === 2) return "5-3-2";
+  const parts = [nD, nM, nF].filter((n) => n > 0);
+  return parts.length ? parts.join("-") : "—";
+}

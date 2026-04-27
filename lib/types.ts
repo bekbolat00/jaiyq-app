@@ -214,6 +214,10 @@ export type DbMatchRow = {
   status: "upcoming" | "finished";
   match_details: string | null;
   ticket_url?: string | null;
+  /** UUID команды хозяев (как на поле слева/низ); для состава `players.team_id`. */
+  home_team_id?: string | null;
+  /** UUID команды гостей. */
+  away_team_id?: string | null;
 };
 
 /** Контекст матча для шторки «ZHAIYQ ЭКСПЕРТ». */

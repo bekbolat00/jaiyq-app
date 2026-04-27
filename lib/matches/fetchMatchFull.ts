@@ -1,5 +1,10 @@
 import { isSupabaseConfigured, supabase } from "@/lib/supabaseClient";
-import type { DbMatchWithRelations, DbTeamRow, DbMatchRow } from "@/lib/types";
+import type {
+  DbMatchWithRelations,
+  DbTeamRow,
+  DbMatchRow,
+  DbPlayerRow,
+} from "@/lib/types";
 
 /** Соответствует вложенной загрузке для матч-центра. */
 /** Как в ТЗ: вложенные `match_events`, `match_stats`, `match_lineups` с `players`. */
@@ -62,6 +67,24 @@ export async function fetchMatchWithRelationsById(
   }
 
   return { match, teams, error: null };
+}
+
+/** Составы из `public.players` для двух команд. */
+export async function fetchPlayersForMatchTeams(
+  homeTeamId: string,
+  awayTeamId: string,
+): Promise<{ data: DbPlayerRow[]; error: Error | null }> {
+  if (!isSupabaseConfigured() || !homeTeamId || !awayTeamId) {
+    return { data: [], error: new Error("Supabase не настроен или team_id") };
+  }
+  const { data, error } = await supabase
+    .from("players")
+    .select("*")
+    .in("team_id", [homeTeamId, awayTeamId]);
+  if (error) {
+    return { data: [], error: new Error(error.message) };
+  }
+  return { data: (data ?? []) as DbPlayerRow[], error: null };
 }
 
 /** Краткие прошедшие матчи (для вкладки «последние матчи»), без вложенностей. */

@@ -2,17 +2,19 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { useCallback, useEffect, useState } from "react";
+import FormationPitch from "@/app/components/FormationPitch";
 import MatchDetailStatsPanel from "@/app/components/MatchDetailStatsPanel";
 import MatchTimeline from "@/app/components/MatchTimeline";
 import TeamBadge from "@/app/components/TeamBadge";
 import {
   fetchMatchWithRelationsById,
+  fetchPlayersForMatchTeams,
   fetchPredictionsStatsForMatch,
   fetchRecentFinishedMatches,
 } from "@/lib/matches/fetchMatchFull";
+import { lineBlocksFromPlayerRows } from "@/lib/matches/squadFromPlayerRows";
 import {
   buildMatchDetailViewModel,
-  type LineBlock,
   type MatchDetailViewModel,
 } from "@/lib/matches/matchDetailFromDb";
 import { TEAM_ZHAIYQ } from "@/lib/constants/zhaiyq";
@@ -96,76 +98,6 @@ type Props = {
   matchId: string | null;
 };
 
-function LineupList({
-  block,
-  accent = "right",
-}: {
-  block: LineBlock;
-  accent?: "left" | "right";
-}) {
-  const col =
-    accent === "left" ? "text-left" : "text-right sm:text-right";
-  const g =
-    "grid w-full items-baseline gap-x-2 gap-y-0.5 border-b border-white/6 py-1.5 text-[11px] [grid-template-columns:1.5rem_1fr_2.75rem] min-[400px]:[grid-template-columns:1.5rem_1fr_2.5rem]";
-
-  const Row = (props: { num: string; name: string; pos: string; id: string }) => (
-    <li className={g} key={props.id}>
-      <span className="font-mono text-[11px] font-bold tabular-nums text-accent">
-        {props.num}
-      </span>
-      <span
-        className={`min-w-0 font-semibold text-foreground/90 ${col}`}
-        title={props.name}
-      >
-        {props.name}
-      </span>
-      <span
-        className={`text-[8px] font-bold uppercase leading-tight text-white/45 ${
-          col.includes("right") ? "text-left sm:text-right" : "text-left"
-        }`}
-      >
-        {props.pos}
-      </span>
-    </li>
-  );
-
-  return (
-    <div>
-      {block.starters.length ? (
-        <ul className="space-y-0">
-          {block.starters.map((p) => <Row key={p.id} {...p} />)}
-        </ul>
-      ) : (
-        <p className="text-center text-[10px] text-white/30">Состав уточняется</p>
-      )}
-      {block.bench.length > 0 ? (
-        <div className="mt-4">
-          <p className="mb-2 text-[8px] font-black uppercase tracking-[0.2em] text-white/30">
-            ЗАПАСНЫЕ
-          </p>
-          <ul className="space-y-0">
-            {block.bench.map((p) => (
-              <Row key={`b-${p.id}`} {...p} />
-            ))}
-          </ul>
-        </div>
-      ) : null}
-      {block.coaches.length > 0 ? (
-        <div className="mt-4">
-          <p className="mb-2 text-[8px] font-black uppercase tracking-[0.2em] text-white/30">
-            ТРЕНЕРСКИЙ ШТАБ
-          </p>
-          <ul className="space-y-0">
-            {block.coaches.map((p) => (
-              <Row key={`c-${p.id}`} {...p} />
-            ))}
-          </ul>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
 export default function MatchDetailSheet({ open, onClose, matchId }: Props) {
   const [tab, setTab] = useState<(typeof TABS)[number]["id"]>("overview");
   const [loading, setLoading] = useState(false);
@@ -197,7 +129,25 @@ export default function MatchDetailSheet({ open, onClose, matchId }: Props) {
         return;
       }
       const mvm = buildMatchDetailViewModel(match, teams);
-      setVm(mvm);
+      let homeSquad = mvm.homeSquad;
+      let awaySquad = mvm.awaySquad;
+      if (mvm.homeId && mvm.awayId) {
+        const { data: plRows, error: plErr } = await fetchPlayersForMatchTeams(
+          mvm.homeId,
+          mvm.awayId,
+        );
+        if (!plErr && plRows.length) {
+          const split = lineBlocksFromPlayerRows(
+            mvm.homeId,
+            mvm.awayId,
+            plRows,
+            match.match_lineups,
+          );
+          homeSquad = split.home;
+          awaySquad = split.away;
+        }
+      }
+      setVm({ ...mvm, homeSquad, awaySquad });
       setLoading(false);
 
       const [rec, vs] = await Promise.all([
@@ -427,30 +377,12 @@ export default function MatchDetailSheet({ open, onClose, matchId }: Props) {
                         animate="animate"
                         exit="exit"
                       >
-                        <div className="grid grid-cols-1 gap-4 min-[500px]:grid-cols-2 min-[500px]:gap-5">
-                          <div>
-                            <p className="mb-2.5 text-center text-[8px] font-bold uppercase tracking-[0.18em] text-white/40">
-                              {showVm.home.shortName}
-                            </p>
-                            <div className="glass rounded-2xl p-3 sm:p-4">
-                              <LineupList
-                                block={showVm.homeSquad}
-                                accent="left"
-                              />
-                            </div>
-                          </div>
-                          <div>
-                            <p className="mb-2.5 text-center text-[8px] font-bold uppercase tracking-[0.18em] text-white/40">
-                              {showVm.away.shortName}
-                            </p>
-                            <div className="glass rounded-2xl p-3 sm:p-4">
-                              <LineupList
-                                block={showVm.awaySquad}
-                                accent="right"
-                              />
-                            </div>
-                          </div>
-                        </div>
+                        <FormationPitch
+                          home={showVm.home}
+                          away={showVm.away}
+                          homeSquad={showVm.homeSquad}
+                          awaySquad={showVm.awaySquad}
+                        />
                       </motion.div>
                     ) : null}
                     {tab === "stats" ? (
@@ -467,10 +399,6 @@ export default function MatchDetailSheet({ open, onClose, matchId }: Props) {
                             stats={showVm.stats}
                             homeName={showVm.home.shortName}
                             awayName={showVm.away.shortName}
-                            zhaiyqIsHome={
-                              showVm.home.id === TEAM_ZHAIYQ.id ||
-                              /жай/i.test(showVm.home.shortName)
-                            }
                           />
                         </div>
                       </motion.div>

@@ -50,9 +50,12 @@ export type DbPlayerRow = {
   team_id: string;
   first_name: string;
   last_name: string;
+  /** Если в БД одна строка `name` (альтернатива first/last) */
+  name?: string | null;
   number?: number | null;
   jersey_number?: number | null;
   position: string;
+  is_starter?: boolean | null;
 };
 
 export type DbMatchEventRow = {

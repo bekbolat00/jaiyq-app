@@ -12,13 +12,22 @@ import type {
   Team,
 } from "@/lib/types";
 
-function playerLabel(p: DbPlayerRow | null | undefined, fallback = ""): string {
+export function formatDbPlayerName(
+  p: DbPlayerRow | null | undefined,
+  fallback = "",
+): string {
   if (!p) return fallback;
+  const single = p.name?.trim();
   const fn = p.first_name?.trim() ?? "";
   const ln = p.last_name?.trim() ?? "";
+  if (single && !fn && !ln) return single;
   if (!fn && !ln) return fallback;
   if (ln && fn) return `${fn[0]}. ${ln}`;
   return fn || ln;
+}
+
+function playerLabel(p: DbPlayerRow | null | undefined, fallback = ""): string {
+  return formatDbPlayerName(p, fallback);
 }
 
 function isZhaiyqTeamName(row: Pick<DbTeamRow, "short_name" | "slug" | "full_name">) {
@@ -27,7 +36,7 @@ function isZhaiyqTeamName(row: Pick<DbTeamRow, "short_name" | "slug" | "full_nam
 }
 
 /** Определяет UUID хозяев/гостей в строках статов и заявок. */
-function resolveHomeAwayTeamIds(
+export function resolveHomeAwayTeamIds(
   matchRow: DbMatchWithRelations,
   teams: DbTeamRow[],
 ): { homeId: string; awayId: string } | null {
@@ -195,6 +204,13 @@ function toLineBlock(
       return { ...base, pos: "ТР" };
     }),
   };
+}
+
+/** Заявка `match_lineups` для одной команды (только с проигрывателем-join при необходимости). */
+export function lineBlockFromLineupRows(
+  rows: (DbMatchLineupRow & { player: DbPlayerRow | null })[],
+): LineBlock {
+  return toLineBlock(rows, "");
 }
 
 export type MatchDetailViewModel = {

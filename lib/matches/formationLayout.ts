@@ -5,20 +5,21 @@ type Line = "вр" | "зщ" | "пз" | "нп" | "oth";
 type LineKey = "вр" | "зщ" | "пз" | "нп";
 
 /**
- * `top`/`left` в % относительно зоны поля, хозяева снизу, гости сверху.
+ * `top`/`left` в % относительно зоны поля.
+ * `fromTopGoal`: true — половина у ворот сверху (GK ~5%), false — снизу (GK ~95%).
  */
 export function getCoordinates(
   line: Line,
   index: number,
   totalInLine: number,
-  isAway: boolean,
+  fromTopGoal: boolean,
 ): { top: string; left: string } {
   const leftPct =
     totalInLine > 0
       ? (100 * (index + 1)) / (totalInLine + 1)
       : 50;
   const baseTop = (() => {
-    if (isAway) {
+    if (fromTopGoal) {
       if (line === "вр") return 5;
       if (line === "зщ") return 20;
       if (line === "пз") return 40;

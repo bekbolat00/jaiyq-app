@@ -8,12 +8,11 @@ import {
 } from "@/lib/matches/formationLayout";
 import type { Team } from "@/lib/types";
 
-type PitchPlaced = LinePlayerRow & { top: string; left: string; zhai: boolean };
-
-function isZhayykName(name: string) {
-  const n = name.toLowerCase();
-  return n.includes("жай") || n.includes("zhai");
-}
+type PitchPlaced = LinePlayerRow & {
+  top: string;
+  left: string;
+  kitColor: string;
+};
 
 function familyLabel(displayName: string): string {
   const t = displayName.trim();
@@ -24,10 +23,11 @@ function familyLabel(displayName: string): string {
   return t.toUpperCase();
 }
 
+/** Хозяева — у ворот сверху (`fromTopGoal`), гости — снизу. */
 function placeTeamOnPitch(
   starters: LinePlayerRow[],
-  isAway: boolean,
-  isZhaiyq: boolean,
+  fromTopGoal: boolean,
+  kitColor: string,
 ): PitchPlaced[] {
   const groups = groupStartersByFieldLine(starters);
   const out: PitchPlaced[] = [];
@@ -37,47 +37,77 @@ function placeTeamOnPitch(
     const n = row.length;
     for (let i = 0; i < n; i++) {
       const pl = row[i]!;
-      const coord = getCoordinates(k, i, n, isAway);
-      out.push({ ...pl, ...coord, zhai: isZhaiyq });
+      const coord = getCoordinates(k, i, n, fromTopGoal);
+      out.push({ ...pl, ...coord, kitColor });
     }
   }
   return out;
 }
 
+function JerseyIcon({ fill, num }: { fill: string; num: string }) {
+  return (
+    <div className="relative h-9 w-8 shrink-0">
+      <svg
+        className="h-9 w-8 drop-shadow-[0_2px_6px_rgba(0,0,0,0.55)]"
+        viewBox="0 0 32 38"
+        fill="none"
+        aria-hidden
+      >
+        <path
+          d="M6 10c0-2.5 2-4.5 10-4.5s10 2 10 4.5v2l4 3v8l-3.2 1.2L24 34H8L7.2 24.2 4 23V15l4-3v-2z"
+          fill={fill}
+          stroke="rgba(255,255,255,0.35)"
+          strokeWidth="0.6"
+        />
+        <path
+          d="M10 10c2-1 4-1.5 6-1.5s4 .5 6 1.5"
+          stroke="rgba(0,0,0,0.12)"
+          strokeWidth="0.5"
+          fill="none"
+        />
+      </svg>
+      <span className="pointer-events-none absolute inset-0 flex items-center justify-center pb-1 text-[11px] font-bold leading-none text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.9)]">
+        {num}
+      </span>
+    </div>
+  );
+}
+
 function PlayerChip({
   num,
   surname,
-  isZhaiyq,
+  kitColor,
   top,
   left,
 }: {
   num: string;
   surname: string;
-  isZhaiyq: boolean;
+  kitColor: string;
   top: string;
   left: string;
 }) {
   return (
     <div
-      className="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2"
+      className="pointer-events-none absolute z-[5] -translate-x-1/2 -translate-y-1/2"
       style={{ top, left }}
     >
-      <div className="relative flex flex-col items-center">
-        <span className="mb-0.5 text-[9px] font-black tabular-nums leading-none text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.85)]">
-          {num}
-        </span>
-        <div
-          className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-white/35 text-[10px] font-bold text-white shadow-[0_2px_8px_rgba(0,0,0,0.45)] ${
-            isZhaiyq ? "bg-cyan-600" : "bg-rose-600"
-          }`}
-          aria-hidden
-        />
-        <span className="mt-0.5 max-w-[4.5rem] truncate text-center text-[7px] font-bold uppercase leading-tight tracking-tight text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.85)]">
+      <div className="relative flex max-w-[4.75rem] flex-col items-center">
+        <JerseyIcon fill={kitColor} num={num} />
+        <span className="mt-0.5 w-full truncate text-center text-[9px] font-semibold leading-tight text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
           {surname}
+        </span>
+        <span className="mt-0.5 text-center text-[10px] leading-none" aria-hidden>
+          🇰🇿
         </span>
       </div>
     </div>
   );
+}
+
+function coachHeadline(block: LineBlock): string {
+  const c = block.coaches[0];
+  if (!c?.name?.trim()) return "—";
+  return c.name.trim();
 }
 
 function SquadListColumn({
@@ -150,6 +180,10 @@ export type FormationPitchProps = {
   away: Team;
   homeSquad: LineBlock;
   awaySquad: LineBlock;
+  /** Цвет формы хозяев в этом матче (из teams.home_color). */
+  homeKitColor: string;
+  /** Цвет формы гостей в этом матче (из teams.away_color). */
+  awayKitColor: string;
 };
 
 export default function FormationPitch({
@@ -157,46 +191,72 @@ export default function FormationPitch({
   away,
   homeSquad,
   awaySquad,
+  homeKitColor,
+  awayKitColor,
 }: FormationPitchProps) {
-  const hZh = isZhayykName(home.shortName);
-  const aZh = isZhayykName(away.shortName);
-  const homePlaced = placeTeamOnPitch(homeSquad.starters, false, hZh);
-  const awayPlaced = placeTeamOnPitch(awaySquad.starters, true, aZh);
+  const homePlaced = placeTeamOnPitch(homeSquad.starters, true, homeKitColor);
+  const awayPlaced = placeTeamOnPitch(awaySquad.starters, false, awayKitColor);
   const homeFormation = formationLabelFromStarters(homeSquad.starters);
   const awayFormation = formationLabelFromStarters(awaySquad.starters);
+  const homeCoach = coachHeadline(homeSquad);
+  const awayCoach = coachHeadline(awaySquad);
 
   return (
     <div className="w-full">
       <div className="relative mt-4 aspect-[3/4] w-full overflow-hidden rounded-xl border-2 border-white/18 bg-[#1a3a2a] shadow-[inset_0_0_40px_rgba(0,0,0,0.35)]">
-        <div className="pointer-events-none absolute inset-x-0 top-2 z-20 flex flex-col items-center gap-1">
-          <p className="text-center text-[10px] font-semibold uppercase tracking-[0.2em] text-white">
-            {awayFormation}
-          </p>
-          {away.logoUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={away.logoUrl}
-              alt=""
-              className="h-9 w-9 object-contain drop-shadow-[0_2px_8px_rgba(0,0,0,0.5)]"
-            />
-          ) : null}
-        </div>
-
-        <div className="pointer-events-none absolute inset-x-0 bottom-2 z-20 flex flex-col items-center gap-1">
-          <p className="text-center text-[10px] font-semibold uppercase tracking-[0.2em] text-white">
-            {homeFormation}
-          </p>
+        {/* Верх: хозяева — шапка слева, схема справа */}
+        <div className="pointer-events-none absolute left-2 top-2 z-20 flex max-w-[55%] items-start gap-2">
           {home.logoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={home.logoUrl}
               alt=""
-              className="h-9 w-9 object-contain drop-shadow-[0_2px_8px_rgba(0,0,0,0.5)]"
+              className="h-10 w-10 shrink-0 object-contain drop-shadow-[0_2px_8px_rgba(0,0,0,0.5)]"
             />
           ) : null}
+          <div className="min-w-0 text-left">
+            <p className="text-[16px] font-extrabold leading-tight text-white">
+              {home.shortName}
+            </p>
+            <p className="mt-1 flex flex-wrap items-center gap-1 text-[11px] font-medium leading-snug text-white/85">
+              <span>{homeCoach}</span>
+              <span aria-hidden>🇰🇿</span>
+            </p>
+          </div>
+        </div>
+        <div className="pointer-events-none absolute right-2 top-2 z-20">
+          <p className="text-right text-[11px] font-bold tabular-nums tracking-wide text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.75)]">
+            {homeFormation}
+          </p>
         </div>
 
-        <div className="absolute inset-x-2 top-[4.25rem] bottom-[4.25rem] rounded-md border border-white/20">
+        {/* Низ: гости — схема слева, шапка справа */}
+        <div className="pointer-events-none absolute bottom-2 left-2 z-20">
+          <p className="text-left text-[11px] font-bold tabular-nums tracking-wide text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.75)]">
+            {awayFormation}
+          </p>
+        </div>
+        <div className="pointer-events-none absolute bottom-2 right-2 z-20 flex max-w-[55%] flex-row-reverse items-end gap-2 text-right">
+          {away.logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={away.logoUrl}
+              alt=""
+              className="h-10 w-10 shrink-0 object-contain drop-shadow-[0_2px_8px_rgba(0,0,0,0.5)]"
+            />
+          ) : null}
+          <div className="min-w-0">
+            <p className="text-[16px] font-extrabold leading-tight text-white">
+              {away.shortName}
+            </p>
+            <p className="mt-1 flex flex-wrap items-center justify-end gap-1 text-[11px] font-medium leading-snug text-white/85">
+              <span>{awayCoach}</span>
+              <span aria-hidden>🇰🇿</span>
+            </p>
+          </div>
+        </div>
+
+        <div className="absolute inset-x-2 top-[22%] bottom-[22%] rounded-md border border-white/20">
           <div className="relative h-full w-full">
             <div className="pointer-events-none absolute inset-0" aria-hidden>
               <div className="absolute top-1/2 w-full border-t border-white/22" />
@@ -205,22 +265,22 @@ export default function FormationPitch({
               <div className="absolute bottom-0 left-1/2 h-[20%] w-[58%] -translate-x-1/2 border-x border-t border-white/22" />
             </div>
 
-            {awayPlaced.map((pl) => (
-              <PlayerChip
-                key={`a-${pl.id}`}
-                num={pl.num}
-                surname={familyLabel(pl.name)}
-                isZhaiyq={pl.zhai}
-                top={pl.top}
-                left={pl.left}
-              />
-            ))}
             {homePlaced.map((pl) => (
               <PlayerChip
                 key={`h-${pl.id}`}
                 num={pl.num}
                 surname={familyLabel(pl.name)}
-                isZhaiyq={pl.zhai}
+                kitColor={pl.kitColor}
+                top={pl.top}
+                left={pl.left}
+              />
+            ))}
+            {awayPlaced.map((pl) => (
+              <PlayerChip
+                key={`a-${pl.id}`}
+                num={pl.num}
+                surname={familyLabel(pl.name)}
+                kitColor={pl.kitColor}
                 top={pl.top}
                 left={pl.left}
               />

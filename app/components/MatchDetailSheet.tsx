@@ -17,7 +17,7 @@ import {
   type MatchDetailViewModel,
 } from "@/lib/matches/matchDetailFromDb";
 import { TEAM_ZHAIYQ } from "@/lib/constants/zhaiyq";
-import type { DbMatchRow, DbPlayerRow, Team } from "@/lib/types";
+import type { DbMatchRow, DbPlayerRow, DbTeamRow, Team } from "@/lib/types";
 import { isSupabaseConfigured, supabase } from "@/lib/supabaseClient";
 
 const TABS = [
@@ -67,6 +67,22 @@ function opponentTeamFromRow(row: DbMatchRow): Team {
 /**
  * Счёт «слева / справа» в колонку для карточек «последние матчи».
  */
+const DEFAULT_HOME_KIT = "#00AEEF";
+const DEFAULT_AWAY_KIT = "#F5C518";
+
+function kitColorsForMatch(
+  teams: DbTeamRow[],
+  matchHomeTeamId: string,
+  matchAwayTeamId: string,
+): { homeKit: string; awayKit: string } {
+  const h = teams.find((t) => t.id === matchHomeTeamId);
+  const a = teams.find((t) => t.id === matchAwayTeamId);
+  return {
+    homeKit: (h?.home_color ?? "").trim() || DEFAULT_HOME_KIT,
+    awayKit: (a?.away_color ?? "").trim() || DEFAULT_AWAY_KIT,
+  };
+}
+
 function matchMiniScore(
   row: DbMatchRow,
 ): { left: string; right: string; lTeam: string; rTeam: string; lid: string } {
@@ -108,6 +124,10 @@ export default function MatchDetailSheet({ open, onClose, matchId }: Props) {
     avgHome: number | null;
     avgAway: number | null;
   }>({ count: 0, avgHome: null, avgAway: null });
+  const [pitchKits, setPitchKits] = useState({
+    home: DEFAULT_HOME_KIT,
+    away: DEFAULT_AWAY_KIT,
+  });
 
   const runFetch = useCallback(
     async (id: string) => {
@@ -130,17 +150,32 @@ export default function MatchDetailSheet({ open, onClose, matchId }: Props) {
       const mvm = buildMatchDetailViewModel(match, teams);
       let homeSquad = mvm.homeSquad;
       let awaySquad = mvm.awaySquad;
-      const homeTeamId =
-        match.home_team_id?.trim() || mvm.homeId || "";
-      const awayTeamId =
-        match.away_team_id?.trim() || mvm.awayId || "";
-      if (homeTeamId && awayTeamId) {
+      const homeTeamId = match.home_team_id?.trim() || mvm.homeId || "";
+      const awayTeamId = match.away_team_id?.trim() || mvm.awayId || "";
+      const kits = kitColorsForMatch(teams, homeTeamId, awayTeamId);
+      setPitchKits({ home: kits.homeKit, away: kits.awayKit });
+
+      const teamIdsForPlayers = [...new Set([homeTeamId, awayTeamId].filter(Boolean))];
+      if (teamIdsForPlayers.length) {
         const { data: players, error: plErr } = await supabase
           .from("players")
           .select("*")
-          .in("team_id", [homeTeamId, awayTeamId]);
+          .in("team_id", teamIdsForPlayers);
         const plRows = (players ?? []) as DbPlayerRow[];
-        if (!plErr && plRows.length) {
+        // eslint-disable-next-line no-console
+        console.log("[MatchDetailSheet] players", {
+          query: `in('team_id', ${JSON.stringify(teamIdsForPlayers)})`,
+          homeTeamId,
+          awayTeamId,
+          error: plErr?.message ?? null,
+          count: plRows.length,
+          sample: plRows.slice(0, 4).map((p) => ({
+            id: p.id,
+            team_id: p.team_id,
+            last_name: p.last_name,
+          })),
+        });
+        if (!plErr && plRows.length && homeTeamId && awayTeamId) {
           const split = lineBlocksFromPlayerRows(
             homeTeamId,
             awayTeamId,
@@ -202,6 +237,7 @@ export default function MatchDetailSheet({ open, onClose, matchId }: Props) {
         setFetchErr(null);
         setRecent([]);
         setVibe({ count: 0, avgHome: null, avgAway: null });
+        setPitchKits({ home: DEFAULT_HOME_KIT, away: DEFAULT_AWAY_KIT });
       }}
     >
       {open && matchId && (
@@ -386,6 +422,8 @@ export default function MatchDetailSheet({ open, onClose, matchId }: Props) {
                           away={showVm.away}
                           homeSquad={showVm.homeSquad}
                           awaySquad={showVm.awaySquad}
+                          homeKitColor={pitchKits.home}
+                          awayKitColor={pitchKits.away}
                         />
                       </motion.div>
                     ) : null}

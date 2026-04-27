@@ -43,6 +43,10 @@ export type DbTeamRow = {
   full_name: string;
   logo_url: string | null;
   slug?: string | null;
+  /** Домашняя форма (hex), для игроков при team_id = match.home_team_id */
+  home_color?: string | null;
+  /** Гостевая форма (hex), для игроков при team_id = match.away_team_id */
+  away_color?: string | null;
 };
 
 export type DbPlayerRow = {

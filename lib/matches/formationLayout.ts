@@ -4,9 +4,15 @@ import type { LinePlayerRow } from "@/lib/matches/matchDetailFromDb";
 type Line = "вр" | "зщ" | "пз" | "нп" | "oth";
 type LineKey = "вр" | "зщ" | "пз" | "нп";
 
+function shirtOrderKey(p: LinePlayerRow): number {
+  const n = Number.parseInt(String(p.num).replace(/\D/g, ""), 10);
+  return Number.isFinite(n) ? n : 999;
+}
+
 /**
- * `top`/`left` в % относительно зоны поля.
- * `fromTopGoal`: true — половина у ворот сверху (GK ~5%), false — снизу (GK ~95%).
+ * `top`/`left` в % относительно **всего** блока поля (внешний контейнер).
+ * `fromTopGoal`: true — ворота сверху; false — ворота снизу.
+ * Внутри линии одинаковый `top`, по горизонтали — равномерно.
  */
 export function getCoordinates(
   line: Line,
@@ -15,27 +21,19 @@ export function getCoordinates(
   fromTopGoal: boolean,
 ): { top: string; left: string } {
   const leftPct =
-    totalInLine > 0
-      ? (100 * (index + 1)) / (totalInLine + 1)
-      : 50;
+    totalInLine > 0 ? (100 * (index + 1)) / (totalInLine + 1) : 50;
   const baseTop = (() => {
     if (fromTopGoal) {
-      if (line === "вр") return 5;
-      if (line === "зщ") return 20;
-      if (line === "пз") return 40;
-      if (line === "нп") {
-        if (totalInLine <= 1) return 65;
-        return 60 + (index * 7) / Math.max(1, totalInLine - 1);
-      }
+      if (line === "вр") return 8;
+      if (line === "зщ") return 22;
+      if (line === "пз") return 45;
+      if (line === "нп") return 68;
       return 45;
     }
-    if (line === "вр") return 95;
-    if (line === "зщ") return 80;
-    if (line === "пз") return 60;
-    if (line === "нп") {
-      if (totalInLine <= 1) return 35;
-      return 38 - (index * 6) / Math.max(1, totalInLine - 1);
-    }
+    if (line === "вр") return 92;
+    if (line === "зщ") return 78;
+    if (line === "пз") return 55;
+    if (line === "нп") return 32;
     return 55;
   })();
   return { top: `${baseTop}%`, left: `${leftPct}%` };
@@ -50,6 +48,9 @@ export function groupStartersByFieldLine(
     const k: LineKey = line === "oth" ? "пз" : (line as LineKey);
     if (!m.has(k)) m.set(k, []);
     m.get(k)!.push(s);
+  }
+  for (const arr of m.values()) {
+    arr.sort((a, b) => shirtOrderKey(a) - shirtOrderKey(b));
   }
   return m;
 }

@@ -25,9 +25,11 @@ export function isFieldLineRole(
 ): "вр" | "зщ" | "пз" | "нп" | "oth" {
   const s = pos.toLowerCase();
   if (/вр|вратар|goal|gk|gк|вратарь/i.test(s)) return "вр";
-  if (/зщ|защит|def|цз|зщит|cb|fb/i.test(s)) return "зщ";
+  // «Полузащитник» содержит подстроку «защит» — сначала пз, потом зщ.
   if (/пз|полузащ|mid|цп|полу|cdm|cm/i.test(s)) return "пз";
-  if (/нап|напад|for|ata|ст|нп|st|cf|fw/i.test(s)) return "нп";
+  if (/зщ|защит|def|цз|зщит|cb|fb/i.test(s)) return "зщ";
+  if (/нап|напад|for|ata|ст|нп|st|cf|fw|винг|wing|winger|фланг|lw|rw/i.test(s))
+    return "нп";
   return "oth";
 }
 

@@ -46,27 +46,21 @@ function placeTeamOnPitch(
 
 function JerseyIcon({ fill, num }: { fill: string; num: string }) {
   return (
-    <div className="relative h-9 w-8 shrink-0">
-      <svg
-        className="h-9 w-8 drop-shadow-[0_2px_6px_rgba(0,0,0,0.55)]"
-        viewBox="0 0 32 38"
-        fill="none"
-        aria-hidden
-      >
+    <div className="relative h-10 w-9 shrink-0">
+      <svg viewBox="0 0 36 40" className="h-10 w-9 drop-shadow-lg" aria-hidden>
         <path
-          d="M6 10c0-2.5 2-4.5 10-4.5s10 2 10 4.5v2l4 3v8l-3.2 1.2L24 34H8L7.2 24.2 4 23V15l4-3v-2z"
+          d="M4 8 L0 14 L8 17 L8 36 L28 36 L28 17 L36 14 L32 8 L24 11 C22 6 14 6 12 11 Z"
           fill={fill}
-          stroke="rgba(255,255,255,0.35)"
-          strokeWidth="0.6"
+          stroke="rgba(255,255,255,0.3)"
+          strokeWidth="0.8"
         />
         <path
-          d="M10 10c2-1 4-1.5 6-1.5s4 .5 6 1.5"
-          stroke="rgba(0,0,0,0.12)"
-          strokeWidth="0.5"
-          fill="none"
+          d="M12 11 C14 6 22 6 24 11"
+          fill="rgba(255,255,255,0.15)"
+          stroke="none"
         />
       </svg>
-      <span className="pointer-events-none absolute inset-0 flex items-center justify-center pb-1 text-[11px] font-bold leading-none text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.9)]">
+      <span className="pointer-events-none absolute inset-0 flex items-center justify-center pt-3 text-[11px] font-black text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.9)]">
         {num}
       </span>
     </div>
@@ -88,17 +82,19 @@ function PlayerChip({
 }) {
   return (
     <div
-      className="pointer-events-none absolute z-[5] -translate-x-1/2 -translate-y-1/2"
+      className="pointer-events-none absolute z-[6] -translate-x-1/2 -translate-y-1/2"
       style={{ top, left }}
     >
-      <div className="relative flex max-w-[6.5rem] flex-col items-center">
+      <div className="relative flex max-w-[9rem] flex-col items-center gap-1.5">
         <JerseyIcon fill={kitColor} num={num} />
-        <span className="mt-0.5 w-full text-center text-[9px] font-semibold leading-tight text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)] [text-wrap:balance]">
-          {surname}
-        </span>
-        <span className="mt-0.5 text-center text-[10px] leading-none" aria-hidden>
-          🇰🇿
-        </span>
+        <div className="flex max-w-full items-center justify-center gap-1 px-0.5">
+          <span className="rounded-md bg-black/65 px-1.5 py-0.5 text-center text-[9px] font-semibold uppercase leading-tight text-white shadow-sm backdrop-blur-[2px] [text-wrap:balance]">
+            {surname}
+          </span>
+          <span className="shrink-0 text-[11px] leading-none" aria-hidden>
+            🇰🇿
+          </span>
+        </div>
       </div>
     </div>
   );
@@ -204,11 +200,11 @@ export default function FormationPitch({
   return (
     <div className="w-full">
       <div
-        className="relative mt-4 w-full overflow-hidden rounded-xl border-2 border-white/18 bg-[#0d2416] shadow-[inset_0_0_40px_rgba(0,0,0,0.35)]"
+        className="relative mt-4 w-full overflow-hidden rounded-xl border-2 border-white/15 bg-[#0a1a32] shadow-[inset_0_0_48px_rgba(0,0,0,0.45)]"
         style={{ minHeight: "580px", height: "580px" }}
       >
         <div
-          className="pointer-events-none absolute inset-0 z-[1] rounded-xl bg-black/20"
+          className="pointer-events-none absolute inset-0 z-[1] rounded-xl bg-gradient-to-b from-black/25 via-transparent to-black/30"
           aria-hidden
         />
         {/* Верх: хозяева — шапка слева, схема справа */}
@@ -263,36 +259,38 @@ export default function FormationPitch({
           </div>
         </div>
 
-        <div className="absolute inset-x-2 top-[22%] bottom-[22%] z-[2] rounded-md border border-white/20">
-          <div className="relative z-[2] h-full w-full">
+        <div className="pointer-events-none absolute inset-x-2 top-[22%] bottom-[22%] z-[2] rounded-md border border-white/22">
+          <div className="relative h-full w-full">
             <div className="pointer-events-none absolute inset-0" aria-hidden>
-              <div className="absolute top-1/2 w-full border-t border-white/22" />
-              <div className="absolute top-1/2 left-1/2 h-14 w-14 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/22" />
-              <div className="absolute top-0 left-1/2 h-[20%] w-[58%] -translate-x-1/2 border-x border-b border-white/22" />
-              <div className="absolute bottom-0 left-1/2 h-[20%] w-[58%] -translate-x-1/2 border-x border-t border-white/22" />
+              <div className="absolute top-1/2 w-full border-t border-white/25" />
+              <div className="absolute top-1/2 left-1/2 h-14 w-14 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/25" />
+              <div className="absolute top-0 left-1/2 h-[20%] w-[58%] -translate-x-1/2 border-x border-b border-white/25" />
+              <div className="absolute bottom-0 left-1/2 h-[20%] w-[58%] -translate-x-1/2 border-x border-t border-white/25" />
             </div>
-
-            {homePlaced.map((pl) => (
-              <PlayerChip
-                key={`h-${pl.id}`}
-                num={pl.num}
-                surname={pitchSurnameLabel(pl)}
-                kitColor={pl.kitColor}
-                top={pl.top}
-                left={pl.left}
-              />
-            ))}
-            {awayPlaced.map((pl) => (
-              <PlayerChip
-                key={`a-${pl.id}`}
-                num={pl.num}
-                surname={pitchSurnameLabel(pl)}
-                kitColor={pl.kitColor}
-                top={pl.top}
-                left={pl.left}
-              />
-            ))}
           </div>
+        </div>
+
+        <div className="pointer-events-none absolute inset-0 z-[5]">
+          {homePlaced.map((pl) => (
+            <PlayerChip
+              key={`h-${pl.id}`}
+              num={pl.num}
+              surname={pitchSurnameLabel(pl)}
+              kitColor={pl.kitColor}
+              top={pl.top}
+              left={pl.left}
+            />
+          ))}
+          {awayPlaced.map((pl) => (
+            <PlayerChip
+              key={`a-${pl.id}`}
+              num={pl.num}
+              surname={pitchSurnameLabel(pl)}
+              kitColor={pl.kitColor}
+              top={pl.top}
+              left={pl.left}
+            />
+          ))}
         </div>
       </div>
 

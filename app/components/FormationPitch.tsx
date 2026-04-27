@@ -1,6 +1,10 @@
 "use client";
 
-import type { LineBlock, LinePlayerRow } from "@/lib/matches/matchDetailFromDb";
+import {
+  surnameFromDisplayLabel,
+  type LineBlock,
+  type LinePlayerRow,
+} from "@/lib/matches/matchDetailFromDb";
 import {
   formationLabelFromStarters,
   getCoordinates,
@@ -14,13 +18,9 @@ type PitchPlaced = LinePlayerRow & {
   kitColor: string;
 };
 
-function familyLabel(displayName: string): string {
-  const t = displayName.trim();
-  const m = t.match(/^[А-ЯA-ZЁІ]\.\s*(.+)$/);
-  if (m?.[1]) return m[1]!.toUpperCase();
-  const parts = t.split(/\s+/).filter(Boolean);
-  if (parts.length >= 2) return parts[parts.length - 1]!.toUpperCase();
-  return t.toUpperCase();
+function pitchSurnameLabel(p: LinePlayerRow): string {
+  const s = (p.surname || surnameFromDisplayLabel(p.name)).trim();
+  return s.toUpperCase();
 }
 
 /** Хозяева — у ворот сверху (`fromTopGoal`), гости — снизу. */
@@ -91,9 +91,9 @@ function PlayerChip({
       className="pointer-events-none absolute z-[5] -translate-x-1/2 -translate-y-1/2"
       style={{ top, left }}
     >
-      <div className="relative flex max-w-[4.75rem] flex-col items-center">
+      <div className="relative flex max-w-[6.5rem] flex-col items-center">
         <JerseyIcon fill={kitColor} num={num} />
-        <span className="mt-0.5 w-full truncate text-center text-[9px] font-semibold leading-tight text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
+        <span className="mt-0.5 w-full text-center text-[9px] font-semibold leading-tight text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)] [text-wrap:balance]">
           {surname}
         </span>
         <span className="mt-0.5 text-center text-[10px] leading-none" aria-hidden>
@@ -128,7 +128,7 @@ function SquadListColumn({
         {p.num}
       </span>
       <span className="min-w-0 font-semibold uppercase">
-        {familyLabel(p.name)}
+        {pitchSurnameLabel(p)}
       </span>
     </li>
   );
@@ -203,7 +203,10 @@ export default function FormationPitch({
 
   return (
     <div className="w-full">
-      <div className="relative mt-4 aspect-[2/3] w-full min-h-[500px] overflow-hidden rounded-xl border-2 border-white/18 bg-[#0d2416] shadow-[inset_0_0_40px_rgba(0,0,0,0.35)]">
+      <div
+        className="relative mt-4 w-full overflow-hidden rounded-xl border-2 border-white/18 bg-[#0d2416] shadow-[inset_0_0_40px_rgba(0,0,0,0.35)]"
+        style={{ minHeight: "580px", height: "580px" }}
+      >
         <div
           className="pointer-events-none absolute inset-0 z-[1] rounded-xl bg-black/20"
           aria-hidden
@@ -273,7 +276,7 @@ export default function FormationPitch({
               <PlayerChip
                 key={`h-${pl.id}`}
                 num={pl.num}
-                surname={familyLabel(pl.name)}
+                surname={pitchSurnameLabel(pl)}
                 kitColor={pl.kitColor}
                 top={pl.top}
                 left={pl.left}
@@ -283,7 +286,7 @@ export default function FormationPitch({
               <PlayerChip
                 key={`a-${pl.id}`}
                 num={pl.num}
-                surname={familyLabel(pl.name)}
+                surname={pitchSurnameLabel(pl)}
                 kitColor={pl.kitColor}
                 top={pl.top}
                 left={pl.left}

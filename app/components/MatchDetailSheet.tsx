@@ -29,21 +29,6 @@ const TABS = [
   { id: "seers" as const, label: "ЭКСТРАСЕНСЫ" },
 ];
 
-const backdropVariants = {
-  hidden: { opacity: 0 },
-  visible: { opacity: 1, transition: { duration: 0.22 } },
-  exit: { opacity: 0, transition: { duration: 0.18 } },
-};
-
-const sheetVariants = {
-  hidden: { y: "100%" },
-  visible: {
-    y: 0,
-    transition: { type: "spring" as const, stiffness: 420, damping: 40 },
-  },
-  exit: { y: "100%", transition: { duration: 0.28, ease: [0.4, 0, 0.2, 1] as const } },
-};
-
 const panelTabVariants = {
   initial: { opacity: 0, y: 8 },
   animate: {
@@ -197,19 +182,6 @@ export default function MatchDetailSheet({ open, onClose, matchId }: Props) {
           .select("*")
           .in("team_id", teamIdsForPlayers);
         const plRows = (players ?? []) as DbPlayerRow[];
-        // eslint-disable-next-line no-console
-        console.log("[MatchDetailSheet] players", {
-          query: `in('team_id', ${JSON.stringify(teamIdsForPlayers)})`,
-          homeTeamId,
-          awayTeamId,
-          error: plErr?.message ?? null,
-          count: plRows.length,
-          sample: plRows.slice(0, 4).map((p) => ({
-            id: p.id,
-            team_id: p.team_id,
-            last_name: p.last_name,
-          })),
-        });
         if (!plErr && plRows.length && homeTeamId && awayTeamId) {
           const split = lineBlocksFromPlayerRows(
             homeTeamId,
@@ -277,58 +249,52 @@ export default function MatchDetailSheet({ open, onClose, matchId }: Props) {
     >
       {open && matchId && (
         <motion.div
-          className="fixed inset-0 z-[100] flex flex-col justify-end"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
+          key={matchId}
+          initial={{ y: "100%" }}
+          animate={{ y: 0 }}
+          exit={{ y: "100%" }}
+          transition={{ type: "spring", stiffness: 420, damping: 40 }}
+          style={{ position: "fixed", inset: 0, zIndex: 50 }}
+          className="glass-premium flex flex-col overflow-hidden border border-white/10 bg-[#020408]/96 shadow-[inset_0_1px_0_rgba(0,240,255,0.08)] backdrop-blur-md"
           role="dialog"
           aria-modal
           aria-labelledby="match-center-title"
         >
-          <motion.button
+          <button
             type="button"
-            className="absolute inset-0 z-0 bg-[#020408]/80 backdrop-blur-sm"
             aria-label="Закрыть"
             onClick={onClose}
-            variants={backdropVariants}
-            initial="hidden"
-            animate="visible"
-            exit="exit"
-          />
-          <motion.aside
-            className="glass-premium relative z-10 flex h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-t-3xl border border-b-0 border-white/10 border-white/8 bg-[#020408]/92 shadow-[0_-20px_60px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(0,240,255,0.1)]"
-            variants={sheetVariants}
-            initial="hidden"
-            animate="visible"
-            exit="exit"
-            onClick={(e) => e.stopPropagation()}
+            className="absolute left-3 top-[max(0.5rem,env(safe-area-inset-top))] z-[60] flex h-10 w-10 items-center justify-center rounded-full border border-white/18 bg-white/[0.08] text-2xl font-light leading-none text-white transition-colors hover:bg-white/[0.14]"
           >
-            <div className="mx-auto mt-2.5 h-1 w-10 shrink-0 rounded-full bg-white/15" aria-hidden />
+            ×
+          </button>
 
-            {fetchErr && !showVm && !loading ? (
-              <div className="px-4 py-6 text-center">
-                <p className="text-sm text-rose-300/90">{fetchErr}</p>
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="mt-4 text-xs font-bold uppercase text-accent"
-                >
-                  Закрыть
-                </button>
-              </div>
-            ) : null}
+          {fetchErr && !showVm && !loading ? (
+            <div className="flex flex-1 flex-col overflow-y-auto px-4 pb-8 pt-14 text-center">
+              <p className="text-sm text-rose-300/90">{fetchErr}</p>
+              <button
+                type="button"
+                onClick={onClose}
+                className="mt-4 text-xs font-bold uppercase text-accent"
+              >
+                Закрыть
+              </button>
+            </div>
+          ) : null}
 
-            {loading && !showVm ? (
+          {loading && !showVm ? (
+            <div className="flex flex-1 flex-col overflow-y-auto px-4 pt-14">
               <div className="flex flex-1 items-center justify-center p-8">
                 <p className="text-sm font-bold uppercase tracking-widest text-white/35">
                   Матч-центр…
                 </p>
               </div>
-            ) : null}
+            </div>
+          ) : null}
 
-            {showVm ? (
-              <>
-                <div className="shrink-0 border-b border-white/8 px-4 pb-3 pt-3">
+          {showVm ? (
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden pt-11">
+              <div className="shrink-0 border-b border-white/8 px-4 pb-3 pt-3 sm:pl-14">
                   <p
                     id="match-center-title"
                     className="text-center text-[9px] font-bold uppercase tracking-[0.2em] text-white/50"
@@ -421,7 +387,7 @@ export default function MatchDetailSheet({ open, onClose, matchId }: Props) {
                   </div>
                 </div>
 
-                <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto px-3 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-3 sm:px-4">
+                <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto px-3 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-3 sm:px-4 sm:pl-4">
                   <AnimatePresence mode="wait">
                     {tab === "overview" ? (
                       <motion.div
@@ -595,9 +561,8 @@ export default function MatchDetailSheet({ open, onClose, matchId }: Props) {
                     ) : null}
                   </AnimatePresence>
                 </div>
-              </>
-            ) : null}
-          </motion.aside>
+            </div>
+          ) : null}
         </motion.div>
       )}
     </AnimatePresence>

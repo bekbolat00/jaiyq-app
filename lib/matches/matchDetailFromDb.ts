@@ -26,6 +26,40 @@ export function formatDbPlayerName(
   return fn || ln;
 }
 
+/** Фамилия из подписи «И. Иванов» или «Иванов И.» (последний токен не должен быть инициалом). */
+export function surnameFromDisplayLabel(displayName: string): string {
+  const t = displayName.trim();
+  if (!t) return "";
+  const m = t.match(/^[А-ЯA-ZЁІ]\.\s*(.+)$/);
+  if (m?.[1]) return m[1]!.trim();
+  const parts = t.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) {
+    const last = parts[parts.length - 1] ?? "";
+    if (/^[А-ЯA-ZЁІ]\.?$/.test(last)) return parts[0]!;
+    return last;
+  }
+  return t;
+}
+
+/** Фамилия для схемы: `display_name` / `last_name` / разбор `name` и склейки first+last. */
+export function playerSurnameForPitch(
+  p: DbPlayerRow | null | undefined,
+): string {
+  if (!p) return "";
+  const display = (p.display_name ?? "").trim();
+  if (display) return display;
+  const ln = (p.last_name ?? "").trim();
+  const fn = (p.first_name ?? "").trim();
+  const single = (p.name ?? "").trim();
+  if (ln.length >= 2) return ln;
+  if (single && !fn && !ln) return surnameFromDisplayLabel(single);
+  const composed = formatDbPlayerName(p, "");
+  const fromComposed = surnameFromDisplayLabel(composed);
+  if (fromComposed.length >= 2) return fromComposed;
+  if (single) return surnameFromDisplayLabel(single);
+  return ln || fn || composed;
+}
+
 function playerLabel(p: DbPlayerRow | null | undefined, fallback = ""): string {
   return formatDbPlayerName(p, fallback);
 }
@@ -127,6 +161,8 @@ function eventText(ev: DbMatchEventRow): string {
 export type LinePlayerRow = {
   num: string;
   name: string;
+  /** Фамилия для поля и списков (из полей БД / без путаницы «Фамилия И.»). */
+  surname: string;
   pos: string;
   id: string;
 };
@@ -156,9 +192,11 @@ function lineFromRow(
   const p = r.player;
   const raw = r.shirt_number ?? p?.number ?? p?.jersey_number;
   const num = raw == null || Number.isNaN(Number(raw)) ? "—" : String(raw);
+  const name = p ? playerLabel(p, "Игрок") : "—";
   return {
     num,
-    name: p ? playerLabel(p, "Игрок") : "—",
+    name,
+    surname: p ? playerSurnameForPitch(p) : surnameFromDisplayLabel(name),
     pos: (r.position_override || p?.position || "—").toUpperCase(),
     id: r.id,
   };

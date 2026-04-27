@@ -56,6 +56,8 @@ export type DbPlayerRow = {
   last_name: string;
   /** Если в БД одна строка `name` (альтернатива first/last) */
   name?: string | null;
+  /** Готовая подпись для отображения, если есть в Supabase */
+  display_name?: string | null;
   number?: number | null;
   jersey_number?: number | null;
   position: string;

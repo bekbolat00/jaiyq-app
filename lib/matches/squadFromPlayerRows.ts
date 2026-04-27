@@ -3,6 +3,8 @@ import {
   type LinePlayerRow,
   formatDbPlayerName,
   lineBlockFromLineupRows,
+  playerSurnameForPitch,
+  surnameFromDisplayLabel,
 } from "@/lib/matches/matchDetailFromDb";
 import type { DbMatchLineupRow, DbPlayerRow } from "@/lib/types";
 
@@ -44,15 +46,19 @@ function sortFieldPlayers(players: DbPlayerRow[]): DbPlayerRow[] {
 
 function coachRowsFromPosition(players: DbPlayerRow[]): LinePlayerRow[] {
   return sortFieldPlayers(players.filter((p) => isCoachByPosition(p.position))).map(
-    (p) => ({
-      id: `coach-${p.id}`,
-      num:
-        p.number == null && p.jersey_number == null
-          ? "—"
-          : String(p.number ?? p.jersey_number),
-      name: formatDbPlayerName(p, "—"),
-      pos: "ТР",
-    }),
+    (p) => {
+      const name = formatDbPlayerName(p, "—");
+      return {
+        id: `coach-${p.id}`,
+        num:
+          p.number == null && p.jersey_number == null
+            ? "—"
+            : String(p.number ?? p.jersey_number),
+        name,
+        surname: playerSurnameForPitch(p) || surnameFromDisplayLabel(name),
+        pos: "ТР",
+      };
+    },
   );
 }
 
@@ -63,10 +69,12 @@ function toLinePlayerFromDb(
   const lu = lineupById.get(p.id);
   const raw = lu?.shirt_number ?? p.number ?? p.jersey_number;
   const num = raw == null || Number.isNaN(Number(raw)) ? "—" : String(raw);
+  const name = formatDbPlayerName(p, "Игрок");
   return {
     id: lu?.id ?? `pl-${p.id}`,
     num,
-    name: formatDbPlayerName(p, "Игрок"),
+    name,
+    surname: playerSurnameForPitch(p) || surnameFromDisplayLabel(name),
     pos: (lu?.position_override || p.position || "—").toUpperCase(),
   };
 }

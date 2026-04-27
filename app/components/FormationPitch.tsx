@@ -38,9 +38,17 @@ const POSITION_LINE: Record<string, number> = {
   lw: 3,
   rw: 3,
   st: 3,
-  "главный тренер": 2,
-  "помощник тренера": 2,
 };
+
+function pitchPosKey(p: LinePlayerRow): string {
+  return (
+    p.pos ??
+    (p as LinePlayerRow & { position?: string }).position ??
+    ""
+  )
+    .toLowerCase()
+    .trim();
+}
 
 /** Хозяева — у ворот сверху (`fromTop`), гости — снизу. */
 function placeTeamOnPitch(
@@ -48,10 +56,14 @@ function placeTeamOnPitch(
   fromTop: boolean,
   kitColor: string,
 ): PitchPlaced[] {
+  const fieldPlayers = players.filter((p) => {
+    const pos = pitchPosKey(p);
+    return pos !== "главный тренер" && pos !== "помощник тренера";
+  });
   // Группируем по линиям
   const lines: Record<number, LinePlayerRow[]> = { 0: [], 1: [], 2: [], 3: [] };
-  for (const p of players) {
-    const pos = (p.pos ?? "").toLowerCase().trim();
+  for (const p of fieldPlayers) {
+    const pos = pitchPosKey(p);
     const line =
       POSITION_LINE[pos] ??
       (pos === "вр" ? 0 : pos === "зщ" ? 1 : pos === "пз" ? 2 : 3);

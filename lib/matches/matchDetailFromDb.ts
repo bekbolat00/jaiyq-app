@@ -41,32 +41,69 @@ export function surnameFromDisplayLabel(displayName: string): string {
   return t;
 }
 
-/** Фамилия для схемы: `display_name` / `last_name` / разбор `name` и склейки first+last. */
-export function playerSurnameForPitch(
+/**
+ * Разбивает `players` на имя/фамилию для UI (тактическая доска, составы,
+ * профиль игрока). В реальной БД `name` хранится как «ФАМИЛИЯ Имя» для
+ * игроков, но как «Имя ФАМИЛИЯ» для тренерского штаба — поэтому фамилию
+ * нельзя определить одним и тем же позиционным правилом для обеих групп
+ * (см. реальные строки `public.players`).
+ */
+export function splitDbPlayerName(
   p: DbPlayerRow | null | undefined,
-): string {
-  if (!p) return "";
+): { firstName: string; surname: string } {
+  if (!p) return { firstName: "", surname: "" };
   const display = (p.display_name ?? "").trim();
-  if (display) return display;
   const ln = (p.last_name ?? "").trim();
   const fn = (p.first_name ?? "").trim();
+  if (ln || fn) return { firstName: fn, surname: ln || display };
+  if (display) return { firstName: "", surname: display };
+
   const single = (p.name ?? "").trim();
-  if (ln.length >= 2) return ln;
-  if (single && !fn && !ln) return surnameFromDisplayLabel(single);
-  const composed = formatDbPlayerName(p, "");
-  const fromComposed = surnameFromDisplayLabel(composed);
-  if (fromComposed.length >= 2) return fromComposed;
-  if (single) return surnameFromDisplayLabel(single);
-  return ln || fn || composed;
+  if (!single) return { firstName: "", surname: "" };
+
+  const parts = single.split(/\s+/).filter(Boolean);
+  if (parts.length < 2) return { firstName: "", surname: single };
+
+  const isCoach = /тренер/i.test((p.position ?? "").trim());
+  return isCoach
+    ? { firstName: parts.slice(0, -1).join(" "), surname: parts[parts.length - 1]! }
+    : { firstName: parts.slice(1).join(" "), surname: parts[0]! };
 }
 
 function playerLabel(p: DbPlayerRow | null | undefined, fallback = ""): string {
   return formatDbPlayerName(p, fallback);
 }
 
-function isZhaiyqTeamName(row: Pick<DbTeamRow, "short_name" | "slug" | "full_name">) {
-  const a = (row.short_name + row.full_name + (row.slug ?? "")).toLowerCase();
+export function isZhaiyqTeamName(
+  row: Pick<DbTeamRow, "short_name" | "slug" | "full_name" | "name">,
+) {
+  const a = [row.name, row.short_name, row.full_name, row.slug]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
   return a.includes("жай") || a.includes("zhaiyq");
+}
+
+/** Совпадение по названию: `matches.opponent` (текст) против `teams.name`/`short_name`/`full_name`. */
+export function normalizeTeamLabel(s: string): string {
+  return s.toLowerCase().replace(/[^a-zа-яёіғқңөұүh0-9]+/gi, "");
+}
+
+export function findTeamByOpponentName<
+  T extends Pick<DbTeamRow, "id" | "short_name" | "full_name" | "name">,
+>(teams: T[], opponentName: string, excludeId?: string): T | null {
+  const target = normalizeTeamLabel(opponentName);
+  if (!target) return null;
+  return (
+    teams.find((t) => {
+      if (t.id === excludeId) return false;
+      const candidates = [t.name, t.short_name, t.full_name]
+        .filter(Boolean)
+        .map((s) => normalizeTeamLabel(s as string))
+        .filter(Boolean);
+      return candidates.some((c) => c.includes(target) || target.includes(c));
+    }) ?? null
+  );
 }
 
 /** Определяет UUID хозяев/гостей в строках статов и заявок. */
@@ -83,7 +120,12 @@ export function resolveHomeAwayTeamIds(
   if (teams.length < 2 && teams.length > 0) {
     return null;
   }
-  const oth = teams.find((t) => t.id !== z?.id) ?? null;
+  // Соперник ищется по названию (`matches.opponent`), а не «любая другая
+  // команда» — иначе при 3+ реальных командах в `teams` подставляется
+  // случайный чужой состав вместо настоящего соперника.
+  const oth = matchRow.opponent
+    ? findTeamByOpponentName(teams, matchRow.opponent, z?.id)
+    : null;
   if (z && oth) {
     if (matchRow.is_home) return { homeId: z.id, awayId: oth.id };
     return { homeId: oth.id, awayId: z.id };
@@ -161,6 +203,8 @@ function eventText(ev: DbMatchEventRow): string {
 export type LinePlayerRow = {
   num: string;
   name: string;
+  /** Имя без фамилии (для карточки профиля игрока). */
+  firstName: string;
   /** Фамилия для поля и списков (из полей БД / без путаницы «Фамилия И.»). */
   surname: string;
   pos: string;
@@ -195,10 +239,12 @@ function lineFromRow(
   const raw = r.shirt_number ?? p?.number ?? p?.jersey_number;
   const num = raw == null || Number.isNaN(Number(raw)) ? "—" : String(raw);
   const name = p ? playerLabel(p, "Игрок") : "—";
+  const { firstName, surname } = splitDbPlayerName(p);
   return {
     num,
     name,
-    surname: p ? playerSurnameForPitch(p) : surnameFromDisplayLabel(name),
+    firstName,
+    surname: surname || surnameFromDisplayLabel(name),
     pos: (r.position_override || p?.position || "—").toUpperCase(),
     id: r.id,
     photoUrl: p?.photo_url?.trim() || null,

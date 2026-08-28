@@ -43,6 +43,8 @@ export type DbTeamRow = {
   full_name: string;
   logo_url: string | null;
   slug?: string | null;
+  /** Реальная схема `public.teams` в проде — только это поле, без short_name/full_name/slug. */
+  name?: string | null;
   /** Домашняя форма (hex), для игроков при team_id = match.home_team_id */
   home_color?: string | null;
   /** Гостевая форма (hex), для игроков при team_id = match.away_team_id */

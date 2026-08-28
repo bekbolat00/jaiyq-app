@@ -14,6 +14,8 @@ import {
 import { lineBlocksFromPlayerRows } from "@/lib/matches/squadFromPlayerRows";
 import {
   buildMatchDetailViewModel,
+  findTeamByOpponentName,
+  isZhaiyqTeamName,
   type MatchDetailViewModel,
 } from "@/lib/matches/matchDetailFromDb";
 import { TEAM_ZHAIYQ } from "@/lib/constants/zhaiyq";
@@ -54,13 +56,6 @@ function opponentTeamFromRow(row: DbMatchRow): Team {
  */
 const DEFAULT_HOME_KIT = "#00AEEF";
 const DEFAULT_AWAY_KIT = "#F5C518";
-
-function isZhaiyqByTeamRow(
-  row: Pick<DbTeamRow, "short_name" | "full_name" | "slug">,
-) {
-  const a = (row.short_name + row.full_name + (row.slug ?? "")).toLowerCase();
-  return a.includes("жай") || a.includes("zhaiyq");
-}
 
 function kitColorsForMatch(
   teams: DbTeamRow[],
@@ -150,9 +145,15 @@ export default function MatchDetailSheet({ open, onClose, matchId }: Props) {
           .from("teams")
           .select("*");
         const trows = (tAll ?? []) as DbTeamRow[];
-        if (!tErr && trows.length >= 2) {
-          const z = trows.find((t) => isZhaiyqByTeamRow(t)) ?? trows[0]!;
-          const oth = trows.find((t) => t.id !== z.id) ?? trows[1]!;
+        // Строгая привязка: «Жайык» ищем по названию, соперника — по
+        // `match.opponent` (текст), а не «первая попавшаяся другая команда»
+        // — иначе при 3+ реальных командах в `teams` подставляется чужой
+        // состав вместо настоящего соперника матча.
+        const z = trows.find((t) => isZhaiyqTeamName(t)) ?? null;
+        const oth = match.opponent
+          ? findTeamByOpponentName(trows, match.opponent, z?.id)
+          : null;
+        if (!tErr && z && oth) {
           if (match.is_home) {
             homeTeamId = z.id;
             awayTeamId = oth.id;

@@ -1,5 +1,5 @@
 import { supabase } from "@/lib/supabaseClient";
-import { formatDbPlayerName } from "@/lib/matches/matchDetailFromDb";
+import { splitDbPlayerName } from "@/lib/matches/matchDetailFromDb";
 import { isFieldLineRole } from "@/lib/matches/squadFromPlayerRows";
 import type { DbPlayerRow } from "@/lib/types";
 
@@ -51,33 +51,9 @@ function isZhaiyqTeamRow(row: TeamNameRow): boolean {
   return label.includes("жай") || label.includes("zhaiyq");
 }
 
-/**
- * `players.name` в этой БД хранится как «ФАМИЛИЯ Имя» для игроков,
- * но как «Имя ФАМИЛИЯ» для тренерского штаба (см. реальные строки
- * в Supabase) — поэтому фамилию/имя нельзя определить одним и тем же
- * позиционным правилом для обеих групп.
- */
-function nameForRoster(p: DbPlayerRow): { firstName: string; surname: string } {
-  const display = (p.display_name ?? "").trim();
-  const ln = (p.last_name ?? "").trim();
-  const fn = (p.first_name ?? "").trim();
-  if (ln || fn) return { firstName: fn, surname: ln || display };
-  if (display) return { firstName: "", surname: display };
-
-  const single = (p.name ?? "").trim();
-  if (!single) return { firstName: "", surname: formatDbPlayerName(p, "Игрок") };
-
-  const parts = single.split(/\s+/).filter(Boolean);
-  if (parts.length < 2) return { firstName: "", surname: single };
-  if (isCoachPosition(p.position ?? "")) {
-    return { firstName: parts.slice(0, -1).join(" "), surname: parts[parts.length - 1]! };
-  }
-  return { firstName: parts.slice(1).join(" "), surname: parts[0]! };
-}
-
 function toRosterPlayer(p: DbPlayerRow): RosterPlayer {
   const raw = p.number ?? p.jersey_number;
-  const { firstName, surname } = nameForRoster(p);
+  const { firstName, surname } = splitDbPlayerName(p);
   return {
     id: p.id,
     number: raw == null || Number.isNaN(Number(raw)) ? "—" : String(raw),

@@ -1,11 +1,15 @@
 "use client";
 
+import { useState } from "react";
 import {
   surnameFromDisplayLabel,
   type LineBlock,
   type LinePlayerRow,
 } from "@/lib/matches/matchDetailFromDb";
 import { formationLabelFromStarters } from "@/lib/matches/formationLayout";
+import PlayerProfileModal, {
+  type ProfileModalPlayer,
+} from "@/app/components/PlayerProfileModal";
 import type { Team } from "@/lib/types";
 
 type PitchPlaced = LinePlayerRow & {
@@ -17,6 +21,18 @@ type PitchPlaced = LinePlayerRow & {
 function pitchSurnameLabel(p: LinePlayerRow): string {
   const s = (p.surname || surnameFromDisplayLabel(p.name)).trim();
   return s.toUpperCase();
+}
+
+function toProfilePlayer(p: LinePlayerRow, teamName: string): ProfileModalPlayer {
+  return {
+    id: p.id,
+    num: p.num,
+    firstName: p.firstName,
+    surname: pitchSurnameLabel(p),
+    pos: p.pos,
+    photoUrl: p.photoUrl,
+    teamName,
+  };
 }
 
 const POSITION_LINE: Record<string, number> = {
@@ -95,18 +111,24 @@ function PlayerChip({
   photoUrl,
   top,
   left,
+  onClick,
 }: {
   surname: string;
   photoUrl: string | null;
   top: string;
   left: string;
+  onClick: () => void;
 }) {
   return (
     <div
       className="pointer-events-none absolute z-[6] -translate-x-1/2 -translate-y-1/2"
       style={{ top, left }}
     >
-      <div className="relative flex max-w-[9rem] flex-col items-center gap-1.5">
+      <button
+        type="button"
+        onClick={onClick}
+        className="pointer-events-auto relative flex max-w-[9rem] flex-col items-center gap-1.5 transition-transform active:scale-95"
+      >
         {/* eslint-disable-next-line @next/next/no-img-element -- remote/local player photo URLs */}
         <img
           src={photoUrl || "/default-avatar.png"}
@@ -121,7 +143,7 @@ function PlayerChip({
             🇰🇿
           </span>
         </div>
-      </div>
+      </button>
     </div>
   );
 }
@@ -136,22 +158,30 @@ function SquadListColumn({
   blockLabel,
   teamName,
   block,
+  onPlayerClick,
 }: {
   blockLabel: string;
   teamName: string;
   block: LineBlock;
+  onPlayerClick: (p: LinePlayerRow) => void;
 }) {
   const Row = ({ p }: { p: LinePlayerRow }) => (
-    <li className="flex items-center gap-2 py-0.5 text-[10px] text-white/90">
-      <span
-        className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full border border-white/25 bg-white/10 text-[8px] font-mono font-bold text-accent"
-        aria-hidden
+    <li>
+      <button
+        type="button"
+        onClick={() => onPlayerClick(p)}
+        className="flex w-full items-center gap-2 rounded-md py-0.5 text-left text-[10px] text-white/90 transition-colors hover:bg-white/5 active:bg-white/10"
       >
-        {p.num}
-      </span>
-      <span className="min-w-0 font-semibold uppercase">
-        {pitchSurnameLabel(p)}
-      </span>
+        <span
+          className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full border border-white/25 bg-white/10 text-[8px] font-mono font-bold text-accent"
+          aria-hidden
+        >
+          {p.num}
+        </span>
+        <span className="min-w-0 font-semibold uppercase">
+          {pitchSurnameLabel(p)}
+        </span>
+      </button>
     </li>
   );
 
@@ -216,6 +246,9 @@ export default function FormationPitch({
   homeKitColor,
   awayKitColor,
 }: FormationPitchProps) {
+  const [activePlayer, setActivePlayer] = useState<ProfileModalPlayer | null>(
+    null,
+  );
   const homePlaced = placeTeamOnPitch(homeSquad.starters, true, homeKitColor);
   const awayPlaced = placeTeamOnPitch(awaySquad.starters, false, awayKitColor);
   const homeFormation = formationLabelFromStarters(homeSquad.starters);
@@ -304,6 +337,7 @@ export default function FormationPitch({
               photoUrl={pl.photoUrl}
               top={pl.top}
               left={pl.left}
+              onClick={() => setActivePlayer(toProfilePlayer(pl, home.shortName))}
             />
           ))}
           {awayPlaced.map((pl) => (
@@ -313,6 +347,7 @@ export default function FormationPitch({
               photoUrl={pl.photoUrl}
               top={pl.top}
               left={pl.left}
+              onClick={() => setActivePlayer(toProfilePlayer(pl, away.shortName))}
             />
           ))}
         </div>
@@ -323,13 +358,20 @@ export default function FormationPitch({
           blockLabel="Хозяева"
           teamName={home.shortName}
           block={homeSquad}
+          onPlayerClick={(p) => setActivePlayer(toProfilePlayer(p, home.shortName))}
         />
         <SquadListColumn
           blockLabel="Гости"
           teamName={away.shortName}
           block={awaySquad}
+          onPlayerClick={(p) => setActivePlayer(toProfilePlayer(p, away.shortName))}
         />
       </div>
+
+      <PlayerProfileModal
+        player={activePlayer}
+        onClose={() => setActivePlayer(null)}
+      />
     </div>
   );
 }

@@ -62,7 +62,7 @@ export default function TeamRosterGroups() {
               {group.players.length}
             </span>
           </div>
-          <div className="grid grid-cols-2 gap-3 min-[420px]:grid-cols-3">
+          <div className="grid grid-cols-2 gap-x-3 gap-y-12">
             {group.players.map((p) => (
               <RosterPlayerCard key={p.id} player={p} />
             ))}

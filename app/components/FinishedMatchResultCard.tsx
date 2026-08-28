@@ -52,7 +52,23 @@ export default function FinishedMatchResultCard({ row, index = 0, onAboutMatch }
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.36, ease: [0.22, 1, 0.36, 1], delay: 0.04 * index }}
-      className="rounded-2xl border border-white/[0.07] bg-white/[0.04] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
+      onClick={onAboutMatch}
+      onKeyDown={
+        onAboutMatch
+          ? (e) => {
+              if (e.key !== "Enter" && e.key !== " ") return;
+              e.preventDefault();
+              onAboutMatch();
+            }
+          : undefined
+      }
+      tabIndex={onAboutMatch ? 0 : undefined}
+      aria-label={onAboutMatch ? `${leftTeam.shortName} — ${rightTeam.shortName}, открыть детали матча` : undefined}
+      className={`rounded-2xl border border-white/[0.07] bg-white/[0.04] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] ${
+        onAboutMatch
+          ? "cursor-pointer transition-colors hover:border-accent/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+          : ""
+      }`}
     >
       <div className="mb-1 flex flex-col gap-0.5 text-center">
         <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/45">
@@ -80,7 +96,10 @@ export default function FinishedMatchResultCard({ row, index = 0, onAboutMatch }
       {onAboutMatch ? (
         <button
           type="button"
-          onClick={onAboutMatch}
+          onClick={(e) => {
+            e.stopPropagation();
+            onAboutMatch();
+          }}
           className="mt-3 flex w-full items-center justify-center rounded-2xl border border-white/14 bg-gradient-to-b from-white/[0.11] to-white/[0.04] py-2.5 text-center text-[11px] font-black uppercase tracking-[0.14em] text-white/90 transition-[transform,box-shadow,background-color] [box-shadow:0_0_20px_rgba(0,240,255,0.12)] hover:border-accent/30 hover:from-white/[0.16] active:scale-[0.99]"
         >
           О МАТЧЕ

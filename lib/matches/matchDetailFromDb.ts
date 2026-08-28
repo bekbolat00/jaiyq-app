@@ -74,6 +74,25 @@ function playerLabel(p: DbPlayerRow | null | undefined, fallback = ""): string {
   return formatDbPlayerName(p, fallback);
 }
 
+/** Физические данные и статистика игрока для профиля (заполняются scripts/scrapeTeam.js). */
+export function playerStatsFields(p: DbPlayerRow | null | undefined): {
+  heightCm: number | null;
+  weightKg: number | null;
+  birthDate: string | null;
+  goals: number | null;
+  matchesPlayed: number | null;
+  minutesPlayed: number | null;
+} {
+  return {
+    heightCm: p?.height ?? null,
+    weightKg: p?.weight ?? null,
+    birthDate: p?.birth_date ?? null,
+    goals: p?.goals ?? null,
+    matchesPlayed: p?.matches_played ?? null,
+    minutesPlayed: p?.minutes_played ?? null,
+  };
+}
+
 export function isZhaiyqTeamName(
   row: Pick<DbTeamRow, "short_name" | "slug" | "full_name" | "name">,
 ) {
@@ -211,6 +230,14 @@ export type LinePlayerRow = {
   id: string;
   /** Фото игрока для фишки на тактической доске (`players.photo_url`). */
   photoUrl: string | null;
+  /** Физические данные и статистика — для профиля игрока (если заполнены). */
+  heightCm: number | null;
+  weightKg: number | null;
+  /** `YYYY-MM-DD`. */
+  birthDate: string | null;
+  goals: number | null;
+  matchesPlayed: number | null;
+  minutesPlayed: number | null;
 };
 
 export type LineBlock = {
@@ -248,6 +275,7 @@ function lineFromRow(
     pos: (r.position_override || p?.position || "—").toUpperCase(),
     id: r.id,
     photoUrl: p?.photo_url?.trim() || null,
+    ...playerStatsFields(p),
   };
 }
 

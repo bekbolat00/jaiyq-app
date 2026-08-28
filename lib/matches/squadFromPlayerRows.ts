@@ -3,6 +3,7 @@ import {
   type LinePlayerRow,
   formatDbPlayerName,
   lineBlockFromLineupRows,
+  playerStatsFields,
   splitDbPlayerName,
   surnameFromDisplayLabel,
 } from "@/lib/matches/matchDetailFromDb";
@@ -62,6 +63,7 @@ function coachRowsFromPosition(players: DbPlayerRow[]): LinePlayerRow[] {
         surname: surname || surnameFromDisplayLabel(name),
         pos: "ТР",
         photoUrl: p.photo_url?.trim() || null,
+        ...playerStatsFields(p),
       };
     },
   );
@@ -84,6 +86,7 @@ function toLinePlayerFromDb(
     surname: surname || surnameFromDisplayLabel(name),
     pos: (lu?.position_override || p.position || "—").toUpperCase(),
     photoUrl: p.photo_url?.trim() || null,
+    ...playerStatsFields(p),
   };
 }
 

@@ -32,6 +32,12 @@ function toProfilePlayer(p: LinePlayerRow, teamName: string): ProfileModalPlayer
     pos: p.pos,
     photoUrl: p.photoUrl,
     teamName,
+    heightCm: p.heightCm,
+    weightKg: p.weightKg,
+    birthDate: p.birthDate,
+    goals: p.goals,
+    matchesPlayed: p.matchesPlayed,
+    minutesPlayed: p.minutesPlayed,
   };
 }
 

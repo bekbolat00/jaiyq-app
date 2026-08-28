@@ -66,6 +66,20 @@ export type DbPlayerRow = {
   is_starter?: boolean | null;
   /** Фото игрока для тактической доски / карточек состава. */
   photo_url?: string | null;
+  /** Рост, см (заполняется scripts/scrapeTeam.js). */
+  height?: number | null;
+  /** Вес, кг (заполняется scripts/scrapeTeam.js). */
+  weight?: number | null;
+  /** Дата рождения, `YYYY-MM-DD` (заполняется scripts/scrapeTeam.js). */
+  birth_date?: string | null;
+  /** Голы в текущем сезоне (заполняется scripts/scrapeTeam.js). */
+  goals?: number | null;
+  /** Сыгранные матчи в текущем сезоне (заполняется scripts/scrapeTeam.js). */
+  matches_played?: number | null;
+  /** Минуты на поле в текущем сезоне (заполняется scripts/scrapeTeam.js). */
+  minutes_played?: number | null;
+  /** Короткая биография (не используется парсером сейчас). */
+  bio?: string | null;
 };
 
 export type DbMatchEventRow = {

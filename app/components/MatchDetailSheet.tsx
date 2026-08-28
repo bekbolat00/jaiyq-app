@@ -145,21 +145,21 @@ export default function MatchDetailSheet({ open, onClose, matchId }: Props) {
           .from("teams")
           .select("*");
         const trows = (tAll ?? []) as DbTeamRow[];
-        // Строгая привязка: «Жайык» ищем по названию, соперника — по
-        // `match.opponent` (текст), а не «первая попавшаяся другая команда»
-        // — иначе при 3+ реальных командах в `teams` подставляется чужой
-        // состав вместо настоящего соперника матча.
-        const z = trows.find((t) => isZhaiyqTeamName(t)) ?? null;
-        const oth = match.opponent
-          ? findTeamByOpponentName(trows, match.opponent, z?.id)
-          : null;
-        if (!tErr && z && oth) {
-          if (match.is_home) {
-            homeTeamId = z.id;
-            awayTeamId = oth.id;
-          } else {
-            homeTeamId = oth.id;
-            awayTeamId = z.id;
+        // Схема `matches` упрощённая: нет надёжных home_team_id/away_team_id,
+        // есть только `is_home` (флаг «Жайык дома») + `opponent` (текст).
+        // «Жайык» в `teams` есть всегда — его сторону резолвим и
+        // показываем независимо от соперника. Соперника ищем по названию,
+        // но если для него нет строки в `teams` (частый случай), просто
+        // оставляем его сторону пустой вместо того, чтобы ронять состав
+        // «Жайыка» тоже.
+        if (!tErr) {
+          const z = trows.find((t) => isZhaiyqTeamName(t)) ?? null;
+          const oth = match.opponent
+            ? findTeamByOpponentName(trows, match.opponent, z?.id)
+            : null;
+          if (z) {
+            homeTeamId = match.is_home ? z.id : oth?.id ?? "";
+            awayTeamId = match.is_home ? oth?.id ?? "" : z.id;
           }
         }
       }
@@ -183,7 +183,10 @@ export default function MatchDetailSheet({ open, onClose, matchId }: Props) {
           .select("*")
           .in("team_id", teamIdsForPlayers);
         const plRows = (players ?? []) as DbPlayerRow[];
-        if (!plErr && plRows.length && homeTeamId && awayTeamId) {
+        if (!plErr && plRows.length) {
+          // `lineBlocksFromPlayerRows` фильтрует игроков по team_id —
+          // пустая сторона (нет команды-соперника в `teams`) просто даёт
+          // пустой LineBlock и не мешает показать реальный состав «Жайыка».
           const split = lineBlocksFromPlayerRows(
             homeTeamId,
             awayTeamId,

@@ -12,12 +12,62 @@ export type ProfileModalPlayer = {
   pos: string;
   photoUrl: string | null;
   teamName: string;
+  heightCm: number | null;
+  weightKg: number | null;
+  /** `YYYY-MM-DD`. */
+  birthDate: string | null;
+  goals: number | null;
+  matchesPlayed: number | null;
+  minutesPlayed: number | null;
 };
 
 type Props = {
   player: ProfileModalPlayer | null;
   onClose: () => void;
 };
+
+function formatBirthDate(iso: string | null): string {
+  const m = (iso ?? "").match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? `${m[3]}.${m[2]}.${m[1]}` : "—";
+}
+
+function formatMetric(value: number | null, suffix: string): string {
+  return value == null ? "—" : `${value} ${suffix}`;
+}
+
+function InfoCell({
+  label,
+  value,
+  className = "",
+}: {
+  label: string;
+  value: string;
+  className?: string;
+}) {
+  return (
+    <div className={`px-3 py-3 ${className}`}>
+      <p className="text-[10px] font-bold uppercase tracking-widest text-muted">
+        {label}
+      </p>
+      <p className="mt-1 truncate text-[14px] font-semibold text-foreground">
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function StatBlock({ value, label }: { value: string; label: string }) {
+  return (
+    <div className="glass-strong flex flex-col items-center justify-center gap-1 rounded-xl px-2 py-4">
+      <p className="font-mono text-[28px] font-black leading-none text-foreground">
+        {value}
+      </p>
+      <p className="text-center text-[9px] font-bold uppercase tracking-widest text-muted">
+        {label}
+      </p>
+    </div>
+  );
+}
 
 export default function PlayerProfileModal({ player, onClose }: Props) {
   useEffect(() => {
@@ -49,7 +99,7 @@ export default function PlayerProfileModal({ player, onClose }: Props) {
         >
           <motion.div
             role="presentation"
-            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+            className="absolute inset-0 bg-black/75 backdrop-blur-sm"
             onClick={onClose}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -57,7 +107,7 @@ export default function PlayerProfileModal({ player, onClose }: Props) {
           />
 
           <motion.div
-            className="glass-premium relative z-10 flex w-full max-w-sm flex-col items-center overflow-hidden rounded-3xl p-6 text-center"
+            className="glass-premium relative z-10 flex w-full max-w-sm flex-col overflow-hidden rounded-3xl"
             initial={{ opacity: 0, y: 16, scale: 0.97 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 10, scale: 0.98, transition: { duration: 0.15 } }}
@@ -68,7 +118,7 @@ export default function PlayerProfileModal({ player, onClose }: Props) {
               type="button"
               aria-label="Закрыть"
               onClick={onClose}
-              className="absolute right-3 top-3 z-20 flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-black/30 text-foreground backdrop-blur-md transition-colors hover:bg-black/50"
+              className="absolute right-3 top-3 z-20 flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-black/40 text-foreground backdrop-blur-md transition-colors hover:bg-black/60"
             >
               <svg
                 viewBox="0 0 24 24"
@@ -84,60 +134,90 @@ export default function PlayerProfileModal({ player, onClose }: Props) {
               </svg>
             </button>
 
-            <div className="relative mt-2 shrink-0">
+            {/* Хиро: имя/номер слева, огромное фото игрока справа (вырезка KFF ложится сюда как есть) */}
+            <div className="relative h-[230px] w-full shrink-0 overflow-hidden bg-black/50">
+              <div className="absolute inset-y-0 right-0 w-[62%]">
+                {/* eslint-disable-next-line @next/next/no-img-element -- remote/local player photo URLs */}
+                <img
+                  src={player.photoUrl || "/default-avatar.png"}
+                  alt=""
+                  className="h-full w-full object-cover object-top"
+                />
+                <div className="absolute inset-0 bg-gradient-to-l from-transparent via-transparent to-[#020408]" />
+              </div>
               <div
                 aria-hidden
-                className="absolute inset-0 -z-10 rounded-full bg-[#00F0FF]/25 blur-2xl"
+                className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#020408] via-[#020408]/5 to-transparent"
               />
-              {/* eslint-disable-next-line @next/next/no-img-element -- remote/local player photo URLs */}
-              <img
-                src={player.photoUrl || "/default-avatar.png"}
-                alt=""
-                className="h-32 w-32 rounded-full border-2 border-white/15 object-cover shadow-[0_12px_36px_rgba(0,0,0,0.5)]"
-              />
-              {player.num !== "—" && (
-                <span className="neon-cyan absolute -bottom-1 -right-1 flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-black/75 font-mono text-[13px] font-bold text-accent backdrop-blur-md">
-                  {player.num}
-                </span>
-              )}
+              <div className="relative z-10 flex h-full max-w-[52%] flex-col justify-end p-4">
+                {player.num !== "—" && (
+                  <span className="neon-cyan font-mono text-[52px] font-black leading-none text-accent">
+                    #{player.num}
+                  </span>
+                )}
+                <h1
+                  id="player-profile-title"
+                  className="mt-1 text-balance text-[24px] font-black uppercase leading-[0.95] text-foreground"
+                >
+                  {player.surname}
+                </h1>
+                {player.firstName ? (
+                  <p className="mt-0.5 truncate text-[13px] font-semibold text-foreground/75">
+                    {player.firstName}
+                  </p>
+                ) : null}
+              </div>
             </div>
 
-            <h1
-              id="player-profile-title"
-              className="mt-4 text-2xl font-black uppercase leading-tight text-foreground"
-            >
-              {player.surname}
-            </h1>
-            {player.firstName ? (
-              <p className="text-[13px] font-semibold text-foreground/80">
-                {player.firstName}
-              </p>
-            ) : null}
+            <div className="flex flex-col gap-4 p-4">
+              <div className="grid grid-cols-2 overflow-hidden rounded-xl border border-white/10">
+                <InfoCell
+                  label="Амплуа"
+                  value={positionFullLabel(player.pos)}
+                  className="border-b border-r border-white/10"
+                />
+                <InfoCell
+                  label="Команда"
+                  value={player.teamName}
+                  className="border-b border-white/10"
+                />
+                <InfoCell
+                  label="Рост"
+                  value={formatMetric(player.heightCm, "см")}
+                  className="border-r border-white/10"
+                />
+                <InfoCell
+                  label="Вес"
+                  value={formatMetric(player.weightKg, "кг")}
+                />
+                <InfoCell
+                  label="Дата рождения"
+                  value={formatBirthDate(player.birthDate)}
+                  className="col-span-2 border-t border-white/10"
+                />
+              </div>
 
-            <div className="mt-5 grid w-full grid-cols-2 gap-0 overflow-hidden rounded-xl border border-white/10 text-left">
-              <div className="border-b border-r border-white/10 px-3 py-3">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-muted">
-                  Команда
-                </p>
-                <p className="mt-1 truncate text-[14px] font-semibold text-foreground">
-                  {player.teamName}
-                </p>
-              </div>
-              <div className="border-b border-white/10 px-3 py-3">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-muted">
-                  Номер
-                </p>
-                <p className="mt-1 text-[14px] font-semibold text-foreground">
-                  {player.num !== "—" ? `#${player.num}` : "—"}
-                </p>
-              </div>
-              <div className="col-span-2 px-3 py-3">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-muted">
-                  Позиция
-                </p>
-                <p className="neon-cyan mt-1 text-[14px] font-semibold text-accent">
-                  {positionFullLabel(player.pos)}
-                </p>
+              <div className="grid grid-cols-3 gap-2">
+                <StatBlock
+                  value={player.goals == null ? "—" : String(player.goals)}
+                  label="Голы"
+                />
+                <StatBlock
+                  value={
+                    player.matchesPlayed == null
+                      ? "—"
+                      : String(player.matchesPlayed)
+                  }
+                  label="Матчей"
+                />
+                <StatBlock
+                  value={
+                    player.minutesPlayed == null
+                      ? "—"
+                      : String(player.minutesPlayed)
+                  }
+                  label="Минут"
+                />
               </div>
             </div>
           </motion.div>

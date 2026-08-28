@@ -111,9 +111,51 @@ function lineBlockFromPlayerTableOnly(
       toLinePlayerFromDb(p, lineupById),
     );
   } else {
-    const s = sortFieldPlayers(field);
-    starters = s.slice(0, 11).map((p) => toLinePlayerFromDb(p, lineupById));
-    bench = s.slice(11).map((p) => toLinePlayerFromDb(p, lineupById));
+    // Без реальной заявки на матч (`is_starter`/`match_lineups`) нельзя
+    // просто взять первых 11 по (линия, номер) — при неравномерном составе
+    // ростера это легко даёт «вратарь + 8 защитников, 0 полузащитников»
+    // вместо похожей на футбол схемы. Вместо этого набираем стартовый
+    // состав по типовым лимитам на линию (1-4-4-2), а нехватку в какой-то
+    // линии (например, нет нападающих в БД) добираем из оставшихся любой
+    // линии — так авто-состав хотя бы отдалённо похож на реальную схему.
+    const byLine: Record<"вр" | "зщ" | "пз" | "нп", DbPlayerRow[]> = {
+      вр: [],
+      зщ: [],
+      пз: [],
+      нп: [],
+    };
+    for (const p of field) {
+      const line = isFieldLineRole(p.position);
+      byLine[line === "oth" ? "пз" : line].push(p);
+    }
+    const order: Array<"вр" | "зщ" | "пз" | "нп"> = ["вр", "зщ", "пз", "нп"];
+    for (const key of order) byLine[key] = sortFieldPlayers(byLine[key]);
+
+    const targetCount: Record<"вр" | "зщ" | "пз" | "нп", number> = {
+      вр: 1,
+      зщ: 4,
+      пз: 4,
+      нп: 2,
+    };
+    const picked: DbPlayerRow[] = [];
+    for (const key of order) picked.push(...byLine[key].slice(0, targetCount[key]));
+
+    if (picked.length < 11) {
+      // Добор нехватки — только полевыми игроками: лишние вратари сверх
+      // целевого 1 не нужны команде на поле, даже если в БД их несколько.
+      const pickedIds = new Set(picked.map((p) => p.id));
+      const rest = order
+        .filter((key) => key !== "вр")
+        .flatMap((key) => byLine[key])
+        .filter((p) => !pickedIds.has(p.id));
+      picked.push(...rest.slice(0, 11 - picked.length));
+    }
+
+    const pickedIds = new Set(picked.map((p) => p.id));
+    starters = sortFieldPlayers(picked).map((p) => toLinePlayerFromDb(p, lineupById));
+    bench = sortFieldPlayers(field.filter((p) => !pickedIds.has(p.id))).map((p) =>
+      toLinePlayerFromDb(p, lineupById),
+    );
   }
   return { starters, bench, coaches };
 }

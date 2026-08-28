@@ -177,25 +177,19 @@ function twoTeamStats(
 
 function eventTypeToTimeline(
   ev: DbMatchEventRow,
-): "goal" | "yellow" | "sub" {
+): "goal" | "yellow" | "red" | "sub" {
   const raw = (ev.event_type ?? ev.type ?? "").toString().toLowerCase();
-  if (raw.includes("sub") || raw.includes("замен") || raw === "substitution") {
-    return "sub";
-  }
   if (
     raw.includes("goal") ||
     raw.includes("гол") ||
     raw === "gol" ||
-    raw === "goal"
+    raw === "penalty" ||
+    raw === "own_goal"
   ) {
     return "goal";
   }
-  if (
-    raw.includes("red") ||
-    raw.includes("красн") ||
-    raw.includes("red_card")
-  ) {
-    return "yellow";
+  if (raw.includes("red") || raw.includes("красн")) {
+    return "red";
   }
   if (
     raw.includes("yellow") ||
@@ -204,6 +198,9 @@ function eventTypeToTimeline(
     raw.includes("yellow_card")
   ) {
     return "yellow";
+  }
+  if (raw.includes("sub") || raw.includes("замен") || raw === "substitution") {
+    return "sub";
   }
   return "sub";
 }
@@ -343,6 +340,8 @@ export type MatchDetailViewModel = {
   homeId: string | null;
   awayId: string | null;
   timeline: LiveTimelineEvent[];
+  /** Счёт на перерыве (по голам с минутой ≤ 45), для маркера «1-й тайм» на таймлайне. */
+  htScore: { home: number; away: number };
   /** Надписи под счётом: кратко, по голам. */
   homeScorers: string;
   awayScorers: string;
@@ -355,7 +354,7 @@ export type MatchDetailViewModel = {
   fullMatchUrl: string | null;
 };
 
-function sideFromTeamId(
+export function sideFromTeamId(
   id: string,
   homeId: string | null,
   awayId: string | null,
@@ -363,6 +362,83 @@ function sideFromTeamId(
   if (id === homeId) return "home";
   if (id === awayId) return "away";
   return "home";
+}
+
+function isGoalEventType(ev: DbMatchEventRow): boolean {
+  return eventTypeToTimeline(ev) === "goal";
+}
+
+/** Счёт на перерыве: голы с минутой ≤ 45. */
+export function computeHalfTimeScore(
+  events: DbMatchEventRow[] | null | undefined,
+  homeId: string | null,
+  awayId: string | null,
+): { home: number; away: number } {
+  let home = 0;
+  let away = 0;
+  for (const ev of events ?? []) {
+    if (ev.minute > 45 || !isGoalEventType(ev)) continue;
+    if (sideFromTeamId(ev.team_id, homeId, awayId) === "home") home += 1;
+    else away += 1;
+  }
+  return { home, away };
+}
+
+/**
+ * Таймлайн с реальными именами игроков (для этого нужна отдельная выборка
+ * `players` — `match_events(*)` без джойна не отдаёт имя) и счётом,
+ * растущим по ходу матча (для подписи голов «1:0 Имя ГОЛ!»).
+ */
+export function buildRichTimeline(
+  events: DbMatchEventRow[] | null | undefined,
+  playersById: Map<string, DbPlayerRow>,
+  homeId: string | null,
+  awayId: string | null,
+): LiveTimelineEvent[] {
+  const sorted = [...(events ?? [])].sort((a, b) => a.minute - b.minute);
+  let homeScore = 0;
+  let awayScore = 0;
+
+  return sorted.map((ev) => {
+    const side = sideFromTeamId(ev.team_id, homeId, awayId);
+    const type = eventTypeToTimeline(ev);
+    const rawType = (ev.event_type ?? ev.type ?? "").toString().toLowerCase();
+    const isPenalty = rawType === "penalty";
+
+    const mainPlayer = ev.player_id ? playersById.get(ev.player_id) : null;
+    const outPlayer = ev.player_out_id ? playersById.get(ev.player_out_id) : null;
+    const mainName = mainPlayer ? playerLabel(mainPlayer, "Игрок") : "Игрок";
+    const outName = outPlayer ? playerLabel(outPlayer, "") : "";
+
+    if (type === "goal") {
+      if (side === "home") homeScore += 1;
+      else awayScore += 1;
+    }
+
+    const label =
+      type === "goal"
+        ? `Гол — ${mainName}`
+        : type === "red"
+          ? `Красная карточка — ${mainName}`
+          : type === "yellow"
+            ? `Жёлтая карточка — ${mainName}`
+            : outName
+              ? `Замена: ${mainName} вместо ${outName}`
+              : mainName;
+
+    return {
+      id: ev.id,
+      minute: ev.minute,
+      type,
+      label,
+      side,
+      playerName: mainName,
+      playerOutName: type === "sub" ? outName : undefined,
+      isPenalty,
+      scoreAfter: type === "goal" ? { home: homeScore, away: awayScore } : undefined,
+      videoUrl: null,
+    };
+  });
 }
 
 /**
@@ -498,6 +574,7 @@ export function buildMatchDetailViewModel(
     homeId,
     awayId,
     timeline,
+    htScore: computeHalfTimeScore(m.match_events, homeId, awayId),
     homeScorers: homeG.length ? homeG.map(fmt).join(" · ") : "—",
     awayScorers: awayG.length ? awayG.map(fmt).join(" · ") : "—",
     stats,

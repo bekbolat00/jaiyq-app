@@ -14,6 +14,8 @@ import {
 import { lineBlocksFromPlayerRows } from "@/lib/matches/squadFromPlayerRows";
 import {
   buildMatchDetailViewModel,
+  buildRichTimeline,
+  computeHalfTimeScore,
   findTeamByOpponentName,
   isZhaiyqTeamName,
   type MatchDetailViewModel,
@@ -137,6 +139,8 @@ export default function MatchDetailSheet({ open, onClose, matchId }: Props) {
       const mvm = buildMatchDetailViewModel(match, teams);
       let homeSquad = mvm.homeSquad;
       let awaySquad = mvm.awaySquad;
+      let timeline = mvm.timeline;
+      let htScore = mvm.htScore;
       let homeTeamId = match.home_team_id?.trim() || mvm.homeId || "";
       let awayTeamId = match.away_team_id?.trim() || mvm.awayId || "";
 
@@ -196,8 +200,24 @@ export default function MatchDetailSheet({ open, onClose, matchId }: Props) {
           homeSquad = split.home;
           awaySquad = split.away;
         }
+        if (!plErr && match.match_events?.length) {
+          // `match_events(*)` не джойнит игрока — имена для таймлайна
+          // берём из уже загруженных `plRows` (players обеих команд).
+          const playersById = new Map(plRows.map((p) => [p.id, p]));
+          timeline = buildRichTimeline(
+            match.match_events,
+            playersById,
+            homeTeamId || null,
+            awayTeamId || null,
+          );
+          htScore = computeHalfTimeScore(
+            match.match_events,
+            homeTeamId || null,
+            awayTeamId || null,
+          );
+        }
       }
-      setVm({ ...mvm, homeSquad, awaySquad });
+      setVm({ ...mvm, homeSquad, awaySquad, timeline, htScore });
       setLoading(false);
 
       const [rec, vs] = await Promise.all([
@@ -446,7 +466,12 @@ export default function MatchDetailSheet({ open, onClose, matchId }: Props) {
                       >
                         <div className="glass rounded-2xl p-3 sm:p-4">
                           {showVm.timeline.length ? (
-                            <MatchTimeline events={showVm.timeline} heading="" />
+                            <MatchTimeline
+                              events={showVm.timeline}
+                              htScore={showVm.htScore}
+                              finalScore={{ home: showVm.homeScore, away: showVm.awayScore }}
+                              heading=""
+                            />
                           ) : (
                             <p className="text-center text-[12px] text-white/40">
                               События появятся после обновления данных

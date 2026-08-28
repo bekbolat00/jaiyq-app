@@ -16,9 +16,18 @@ import { TEAM_ZHAIYQ } from "@/lib/constants/zhaiyq";
 export type LiveTimelineEvent = {
   id: string;
   minute: number;
-  type: "goal" | "yellow" | "sub";
+  type: "goal" | "yellow" | "red" | "sub";
   label: string;
   side: "home" | "away";
+  /** Главный участник события (автор гола/карточки, вышедший на замену). */
+  playerName?: string;
+  /** Для замены — кто ушёл с поля. */
+  playerOutName?: string;
+  /** Гол с пенальти. */
+  isPenalty?: boolean;
+  /** Счёт сразу после этого гола. */
+  scoreAfter?: { home: number; away: number };
+  videoUrl?: string | null;
 };
 
 export { TEAM_ZHAIYQ };

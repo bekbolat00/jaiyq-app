@@ -41,7 +41,7 @@ function toProfilePlayer(p: LinePlayerRow, teamName: string): ProfileModalPlayer
   };
 }
 
-const POSITION_LINE: Record<string, number> = {
+const POSITION_COLUMN: Record<string, number> = {
   вр: 0,
   gk: 0,
   зщ: 1,
@@ -72,40 +72,43 @@ function pitchPosKey(p: LinePlayerRow): string {
     .trim();
 }
 
-/** Хозяева — у ворот сверху (`fromTop`), гости — снизу. */
+const PITCH_WIDTH = 720;
+const PITCH_HEIGHT = 440;
+
+/**
+ * Горизонтальная схема (как на референсе): хозяева выстроены слева направо
+ * (вратарь у левого края — нападающие ближе к центру), гости — зеркально
+ * справа налево.
+ */
 function placeTeamOnPitch(
   players: LinePlayerRow[],
-  fromTop: boolean,
+  fromLeft: boolean,
   kitColor: string,
 ): PitchPlaced[] {
   const fieldPlayers = players.filter((p) => {
     const pos = pitchPosKey(p);
     return pos !== "главный тренер" && pos !== "помощник тренера";
   });
-  // Группируем по линиям
-  const lines: Record<number, LinePlayerRow[]> = { 0: [], 1: [], 2: [], 3: [] };
+  const columns: Record<number, LinePlayerRow[]> = { 0: [], 1: [], 2: [], 3: [] };
   for (const p of fieldPlayers) {
     const pos = pitchPosKey(p);
-    const line =
-      POSITION_LINE[pos] ??
+    const col =
+      POSITION_COLUMN[pos] ??
       (pos === "вр" ? 0 : pos === "зщ" ? 1 : pos === "пз" ? 2 : 3);
-    lines[line].push(p);
+    columns[col].push(p);
   }
 
-  // top% для каждой линии
-  // fromTop=true: хозяева сверху (вр=8%, зщ=24%, пз=45%, нп=65%)
-  // fromTop=false: гости снизу (вр=92%, зщ=76%, пз=55%, нп=35%)
-  const topByLine = fromTop ? [8, 24, 45, 65] : [92, 76, 55, 35];
+  // left% для каждой колонки: fromLeft=true — вратарь у левого края, атака
+  // ближе к центру; fromLeft=false — зеркально у правого края.
+  const leftByColumn = fromLeft ? [8, 22, 35, 47] : [92, 78, 65, 53];
 
   const result: PitchPlaced[] = [];
-  for (const lineIdx of [0, 1, 2, 3]) {
-    const group = lines[lineIdx];
+  for (const colIdx of [0, 1, 2, 3]) {
+    const group = columns[colIdx];
     if (!group.length) continue;
-    const top = topByLine[lineIdx]!;
+    const left = leftByColumn[colIdx]!;
     group.forEach((p, i) => {
-      // Равномерно по горизонтали: отступ 10% с каждой стороны
-      const left =
-        group.length === 1 ? 50 : 10 + (i / (group.length - 1)) * 80;
+      const top = group.length === 1 ? 50 : 12 + (i / (group.length - 1)) * 76;
       result.push({ ...p, top: `${top}%`, left: `${left}%`, kitColor });
     });
   }
@@ -113,16 +116,20 @@ function placeTeamOnPitch(
 }
 
 function PlayerChip({
+  num,
   surname,
   photoUrl,
   top,
   left,
+  kitColor,
   onClick,
 }: {
+  num: string;
   surname: string;
   photoUrl: string | null;
   top: string;
   left: string;
+  kitColor: string;
   onClick: () => void;
 }) {
   return (
@@ -133,31 +140,95 @@ function PlayerChip({
       <button
         type="button"
         onClick={onClick}
-        className="pointer-events-auto relative flex max-w-[9rem] flex-col items-center gap-1.5 transition-transform active:scale-95"
+        className="pointer-events-auto flex flex-col items-center gap-1 transition-transform active:scale-95"
       >
-        {/* eslint-disable-next-line @next/next/no-img-element -- remote/local player photo URLs */}
-        <img
-          src={photoUrl || "/default-avatar.png"}
-          alt=""
-          className="w-8 h-8 rounded-full border border-white/50 object-cover shadow-lg"
-        />
-        <div className="flex max-w-full items-center justify-center gap-1 px-0.5">
-          <span className="rounded-md bg-black/65 px-1.5 py-0.5 text-center text-[9px] font-semibold uppercase leading-tight text-white shadow-sm backdrop-blur-[2px] [text-wrap:balance]">
-            {surname}
-          </span>
-          <span className="shrink-0 text-[11px] leading-none" aria-hidden>
-            🇰🇿
-          </span>
+        <div
+          className="h-11 w-11 shrink-0 overflow-hidden rounded-full bg-[#e4e7ec]"
+          style={{ boxShadow: `0 0 0 2px ${kitColor}, 0 2px 6px rgba(0,0,0,0.25)` }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element -- remote/local player photo URLs */}
+          <img
+            src={photoUrl || "/default-avatar.png"}
+            alt=""
+            className="h-full w-full object-cover"
+          />
         </div>
+        <span className="max-w-[78px] truncate text-center text-[10px] font-bold leading-tight text-[#1c2230]">
+          {num} {surname}
+        </span>
       </button>
     </div>
   );
 }
 
-function coachHeadline(block: LineBlock): string {
-  const c = block.coaches[0];
-  if (!c?.name?.trim()) return "—";
-  return c.name.trim();
+function PitchMarkings() {
+  return (
+    <div className="pointer-events-none absolute inset-0" aria-hidden>
+      <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-gray-300" />
+      <div className="absolute left-1/2 top-1/2 h-24 w-24 -translate-x-1/2 -translate-y-1/2 rounded-full border border-gray-300" />
+      <div className="absolute left-1/2 top-1/2 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-gray-300" />
+      <div className="absolute left-0 top-1/2 h-[34%] w-[6%] -translate-y-1/2 border-y border-r border-gray-300" />
+      <div className="absolute right-0 top-1/2 h-[34%] w-[6%] -translate-y-1/2 border-y border-l border-gray-300" />
+      <div className="absolute left-0 top-0 h-4 w-4 rounded-br-full border-b border-r border-gray-300" />
+      <div className="absolute right-0 top-0 h-4 w-4 rounded-bl-full border-b border-l border-gray-300" />
+      <div className="absolute bottom-0 left-0 h-4 w-4 rounded-tr-full border-r border-t border-gray-300" />
+      <div className="absolute bottom-0 right-0 h-4 w-4 rounded-tl-full border-l border-t border-gray-300" />
+    </div>
+  );
+}
+
+function PitchHeaderBar({
+  home,
+  away,
+  homeFormation,
+  awayFormation,
+}: {
+  home: Team;
+  away: Team;
+  homeFormation: string;
+  awayFormation: string;
+}) {
+  return (
+    <div className="relative flex h-14 w-full items-stretch overflow-hidden rounded-t-xl bg-[#101d33]">
+      <div className="flex flex-1 items-center justify-between gap-2 px-3">
+        <div className="flex min-w-0 items-center gap-2">
+          {home.logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={home.logoUrl}
+              alt=""
+              className="h-7 w-7 shrink-0 object-contain"
+            />
+          ) : null}
+          <span className="truncate text-[14px] font-extrabold text-white">
+            {home.shortName}
+          </span>
+        </div>
+        <span className="shrink-0 font-mono text-[12px] font-bold text-white/55">
+          {homeFormation}
+        </span>
+      </div>
+      <div className="w-px shrink-0 bg-white/15" aria-hidden />
+      <div className="flex flex-1 items-center justify-between gap-2 px-3">
+        <span className="shrink-0 font-mono text-[12px] font-bold text-white/55">
+          {awayFormation}
+        </span>
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="truncate text-[14px] font-extrabold text-white">
+            {away.shortName}
+          </span>
+          {away.logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={away.logoUrl}
+              alt=""
+              className="h-7 w-7 shrink-0 object-contain"
+            />
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function SquadListColumn({
@@ -259,103 +330,47 @@ export default function FormationPitch({
   const awayPlaced = placeTeamOnPitch(awaySquad.starters, false, awayKitColor);
   const homeFormation = formationLabelFromStarters(homeSquad.starters);
   const awayFormation = formationLabelFromStarters(awaySquad.starters);
-  const homeCoach = coachHeadline(homeSquad);
-  const awayCoach = coachHeadline(awaySquad);
 
   return (
     <div className="w-full">
-      <div
-        className="relative mt-4 w-full overflow-hidden rounded-xl border-2 border-white/15 bg-[#0a1a32] shadow-[inset_0_0_48px_rgba(0,0,0,0.45)]"
-        style={{ minHeight: "580px", height: "580px" }}
-      >
-        <div
-          className="pointer-events-none absolute inset-0 z-[1] rounded-xl bg-gradient-to-b from-black/25 via-transparent to-black/30"
-          aria-hidden
-        />
-        {/* Верх: хозяева — шапка слева, схема справа */}
-        <div className="pointer-events-none absolute left-2 top-2 z-20 flex max-w-[55%] items-start gap-2">
-          {home.logoUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={home.logoUrl}
-              alt=""
-              className="h-10 w-10 shrink-0 object-contain drop-shadow-[0_2px_8px_rgba(0,0,0,0.5)]"
-            />
-          ) : null}
-          <div className="min-w-0 text-left">
-            <p className="text-[16px] font-extrabold leading-tight text-white">
-              {home.shortName}
-            </p>
-            <p className="mt-1 flex flex-wrap items-center gap-1 text-[11px] font-medium leading-snug text-white/85">
-              <span>{homeCoach}</span>
-              <span aria-hidden>🇰🇿</span>
-            </p>
+      <div className="no-scrollbar -mx-3 overflow-x-auto pb-1 sm:-mx-4">
+        <div className="relative mx-3 sm:mx-4" style={{ width: PITCH_WIDTH }}>
+          <PitchHeaderBar
+            home={home}
+            away={away}
+            homeFormation={homeFormation}
+            awayFormation={awayFormation}
+          />
+          <div
+            className="relative overflow-hidden rounded-b-xl border border-t-0 border-gray-300 bg-[#f6f7f9]"
+            style={{ height: PITCH_HEIGHT }}
+          >
+            <PitchMarkings />
+            {homePlaced.map((pl) => (
+              <PlayerChip
+                key={`h-${pl.id}`}
+                num={pl.num}
+                surname={pitchSurnameLabel(pl)}
+                photoUrl={pl.photoUrl}
+                top={pl.top}
+                left={pl.left}
+                kitColor={pl.kitColor}
+                onClick={() => setActivePlayer(toProfilePlayer(pl, home.shortName))}
+              />
+            ))}
+            {awayPlaced.map((pl) => (
+              <PlayerChip
+                key={`a-${pl.id}`}
+                num={pl.num}
+                surname={pitchSurnameLabel(pl)}
+                photoUrl={pl.photoUrl}
+                top={pl.top}
+                left={pl.left}
+                kitColor={pl.kitColor}
+                onClick={() => setActivePlayer(toProfilePlayer(pl, away.shortName))}
+              />
+            ))}
           </div>
-        </div>
-        <div className="pointer-events-none absolute right-2 top-2 z-20">
-          <p className="text-right text-[11px] font-bold tabular-nums tracking-wide text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.75)]">
-            {homeFormation}
-          </p>
-        </div>
-
-        {/* Низ: гости — схема слева, шапка справа */}
-        <div className="pointer-events-none absolute bottom-2 left-2 z-20">
-          <p className="text-left text-[11px] font-bold tabular-nums tracking-wide text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.75)]">
-            {awayFormation}
-          </p>
-        </div>
-        <div className="pointer-events-none absolute bottom-2 right-2 z-20 flex max-w-[55%] flex-row-reverse items-end gap-2 text-right">
-          {away.logoUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={away.logoUrl}
-              alt=""
-              className="h-10 w-10 shrink-0 object-contain drop-shadow-[0_2px_8px_rgba(0,0,0,0.5)]"
-            />
-          ) : null}
-          <div className="min-w-0">
-            <p className="text-[16px] font-extrabold leading-tight text-white">
-              {away.shortName}
-            </p>
-            <p className="mt-1 flex flex-wrap items-center justify-end gap-1 text-[11px] font-medium leading-snug text-white/85">
-              <span>{awayCoach}</span>
-              <span aria-hidden>🇰🇿</span>
-            </p>
-          </div>
-        </div>
-
-        <div className="pointer-events-none absolute inset-x-2 top-[22%] bottom-[22%] z-[2] rounded-md border border-white/22">
-          <div className="relative h-full w-full">
-            <div className="pointer-events-none absolute inset-0" aria-hidden>
-              <div className="absolute top-1/2 w-full border-t border-white/25" />
-              <div className="absolute top-1/2 left-1/2 h-14 w-14 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/25" />
-              <div className="absolute top-0 left-1/2 h-[20%] w-[58%] -translate-x-1/2 border-x border-b border-white/25" />
-              <div className="absolute bottom-0 left-1/2 h-[20%] w-[58%] -translate-x-1/2 border-x border-t border-white/25" />
-            </div>
-          </div>
-        </div>
-
-        <div className="pointer-events-none absolute inset-0 z-[5]">
-          {homePlaced.map((pl) => (
-            <PlayerChip
-              key={`h-${pl.id}`}
-              surname={pitchSurnameLabel(pl)}
-              photoUrl={pl.photoUrl}
-              top={pl.top}
-              left={pl.left}
-              onClick={() => setActivePlayer(toProfilePlayer(pl, home.shortName))}
-            />
-          ))}
-          {awayPlaced.map((pl) => (
-            <PlayerChip
-              key={`a-${pl.id}`}
-              surname={pitchSurnameLabel(pl)}
-              photoUrl={pl.photoUrl}
-              top={pl.top}
-              left={pl.left}
-              onClick={() => setActivePlayer(toProfilePlayer(pl, away.shortName))}
-            />
-          ))}
         </div>
       </div>
 

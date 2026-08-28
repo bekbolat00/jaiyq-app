@@ -238,6 +238,34 @@ function parseMatchStats(combined, matchId) {
 }
 
 /**
+ * События матча (голы/карточки/замены) — в отличие от статистики, этот
+ * блок реально встроен в HTML (`matches:<id>:ru:events`). Для замены
+ * KFF отдаёт `player_id/player_name` как игрока, УХОДЯЩЕГО с поля, и
+ * `player2_id/player2_name` — как выходящего НА поле (проверено на
+ * матче 1274: `player2_name` в этих событиях совпадает с игроком,
+ * реально появившимся на замену по протоколу).
+ */
+function parseMatchEvents(combined, matchId) {
+  const raw = extractEscapedJsonObject(combined, `matches:${matchId}:ru:events`);
+  if (!raw?.events) return [];
+  return raw.events.map((e) => ({
+    kffEventId: e.id,
+    half: e.half ?? null,
+    minute: e.minute,
+    eventType: (e.event_type ?? "").toLowerCase(),
+    teamKffId: e.team_id,
+    teamName: e.team_name ?? null,
+    // Обычные события (гол/карточка): единственный участник.
+    // Замена: playerNumber/playerName — кто ушёл, player2Number/player2Name — кто вышел.
+    playerNumber: typeof e.player_number === "number" ? e.player_number : null,
+    playerName: e.player_name || null,
+    player2Number: typeof e.player2_number === "number" ? e.player2_number : null,
+    player2Name: e.player2_name || null,
+    videoUrl: e.video_url || null,
+  }));
+}
+
+/**
  * Скачивает и парсит страницу одного матча.
  * @param {string} matchIdOrUrl ID матча ("1274") или полный URL страницы.
  */
@@ -267,6 +295,7 @@ async function scrapeMatch(matchIdOrUrl) {
 
   const lineups = lineupPayload?.lineups ?? null;
   const stats = parseMatchStats(combined, matchId);
+  const events = parseMatchEvents(combined, matchId);
 
   return {
     matchId: Number(matchId),
@@ -303,6 +332,8 @@ async function scrapeMatch(matchIdOrUrl) {
     // Владение/удары/угловые и т.д. — null, если сайт не отдал их в HTML
     // для этого матча (см. пояснение в шапке файла).
     stats,
+    // Голы/карточки/замены с минутами — реально есть в HTML почти всегда.
+    events,
     lineups: lineups
       ? {
           home: normalizeTeamLineup(lineups.home_team),
@@ -428,15 +459,29 @@ async function upsertPlayersForTeam(supabase, teamId, players, { allowInsert }) 
   return stats;
 }
 
-function mapStatsRowForDb(side) {
+/**
+ * `public.match_stats` — ОДНА строка на матч с колонками `home_*`/`away_*`
+ * (проверено через реальную схему, не через миграцию/типы в приложении —
+ * они этому расходятся: там ошибочно предполагалась строка на команду).
+ */
+function mapStatsRowForDb(matchId, home, away) {
+  const pick = (side, key) => (side ? (side[key] ?? null) : null);
   return {
-    possession: side.possession ?? null,
-    shots: side.shots ?? null,
-    shots_on_target: side.shotsOnTarget ?? null,
-    corners: side.corners ?? null,
-    offsides: side.offsides ?? null,
-    saves: side.saves ?? null,
-    yellow_cards: side.yellowCards ?? null,
+    match_id: matchId,
+    home_possession: pick(home, "possession"),
+    away_possession: pick(away, "possession"),
+    home_shots: pick(home, "shots"),
+    away_shots: pick(away, "shots"),
+    home_shots_on_target: pick(home, "shotsOnTarget"),
+    away_shots_on_target: pick(away, "shotsOnTarget"),
+    home_corners: pick(home, "corners"),
+    away_corners: pick(away, "corners"),
+    home_offsides: pick(home, "offsides"),
+    away_offsides: pick(away, "offsides"),
+    home_saves: pick(home, "saves"),
+    away_saves: pick(away, "saves"),
+    home_yellow_cards: pick(home, "yellowCards"),
+    away_yellow_cards: pick(away, "yellowCards"),
   };
 }
 
@@ -465,6 +510,77 @@ async function findMatchRow(supabase, scraped) {
  * Импортирует результат `scrapeMatch()` в Supabase: команды, игроков,
  * ссылки на видео и (если найдена) статистику матча.
  */
+/**
+ * Пишет голы/карточки/замены в `public.match_events`
+ * (id, match_id, team_id, minute, type, player_id, player_out_id —
+ * реальная схема, без `description`/`video_url`/`half`). Игроков находит
+ * по номеру формы внутри уже известной команды; событие с нерешённым
+ * игроком просто пропускается (никогда не пишем угаданную привязку).
+ * Не импортирует повторно, если у матча уже есть события.
+ */
+async function importMatchEvents(supabase, matchId, scraped, homeTeamId, awayTeamId) {
+  const { count, error: countErr } = await supabase
+    .from("match_events")
+    .select("id", { count: "exact", head: true })
+    .eq("match_id", matchId);
+  if (countErr) return { inserted: 0, skipped: 0, error: countErr.message };
+  if (count && count > 0) {
+    return { inserted: 0, skipped: scraped.events.length, note: "У матча уже есть события — пропущено." };
+  }
+
+  const [{ data: homePlayers }, { data: awayPlayers }] = await Promise.all([
+    supabase.from("players").select("id, number").eq("team_id", homeTeamId),
+    supabase.from("players").select("id, number").eq("team_id", awayTeamId),
+  ]);
+  const numberToId = (rows) => {
+    const map = new Map();
+    for (const r of rows ?? []) if (r.number != null) map.set(Number(r.number), r.id);
+    return map;
+  };
+  const homeMap = numberToId(homePlayers);
+  const awayMap = numberToId(awayPlayers);
+
+  const rows = [];
+  let skipped = 0;
+  for (const e of scraped.events) {
+    const teamId =
+      e.teamKffId === scraped.homeTeam?.id
+        ? homeTeamId
+        : e.teamKffId === scraped.awayTeam?.id
+          ? awayTeamId
+          : null;
+    if (!teamId) {
+      skipped += 1;
+      continue;
+    }
+    const roster = teamId === homeTeamId ? homeMap : awayMap;
+    const isSub = e.eventType.includes("sub");
+
+    const mainNumber = isSub ? e.player2Number : e.playerNumber;
+    const outNumber = isSub ? e.playerNumber : null;
+    const playerId = mainNumber != null ? roster.get(mainNumber) : null;
+    const playerOutId = outNumber != null ? roster.get(outNumber) : null;
+
+    if (!playerId) {
+      skipped += 1;
+      continue;
+    }
+    rows.push({
+      match_id: matchId,
+      team_id: teamId,
+      minute: e.minute,
+      type: e.eventType,
+      player_id: playerId,
+      player_out_id: playerOutId ?? null,
+    });
+  }
+
+  if (!rows.length) return { inserted: 0, skipped };
+  const { error: insErr } = await supabase.from("match_events").insert(rows);
+  if (insErr) return { inserted: 0, skipped, error: insErr.message };
+  return { inserted: rows.length, skipped };
+}
+
 async function importMatchToSupabase(scraped) {
   if (!scraped.lineups) {
     throw new Error("В скрапе нет составов (lineups) — импортировать нечего.");
@@ -541,21 +657,27 @@ async function importMatchToSupabase(scraped) {
   summary.match = { id: matchRow.id, opponent: matchRow.opponent, isHome: matchRow.is_home };
 
   if (scraped.stats && (scraped.stats.home || scraped.stats.away)) {
-    const rows = [];
-    if (scraped.stats.home) {
-      rows.push({ match_id: matchRow.id, team_id: homeTeamInfo.id, is_home: true, ...mapStatsRowForDb(scraped.stats.home) });
-    }
-    if (scraped.stats.away) {
-      rows.push({ match_id: matchRow.id, team_id: awayTeamInfo.id, is_home: false, ...mapStatsRowForDb(scraped.stats.away) });
-    }
-    const { error: statsErr } = await supabase.from("match_stats").insert(rows);
+    const row = mapStatsRowForDb(matchRow.id, scraped.stats.home, scraped.stats.away);
+    const { error: statsErr } = await supabase.from("match_stats").insert(row);
     if (statsErr) summary.warnings.push(`match_stats insert: ${statsErr.message}`);
-    else summary.stats = { inserted: rows.length };
+    else summary.stats = { inserted: 1 };
   } else {
     summary.warnings.push(
       "Статистика матча (владение/удары/угловые) не найдена на странице KFF для " +
         "этого матча — match_stats не заполнен. Реальных чисел на сайте нет, мок не пишем.",
     );
+  }
+
+  if (scraped.events?.length) {
+    summary.events = await importMatchEvents(
+      supabase,
+      matchRow.id,
+      scraped,
+      homeTeamInfo.id,
+      awayTeamInfo.id,
+    );
+  } else {
+    summary.events = { inserted: 0, skipped: 0 };
   }
 
   return summary;
@@ -608,5 +730,6 @@ module.exports = {
   matchIdFromUrl,
   mapPosition,
   parseMatchStats,
+  parseMatchEvents,
   importMatchToSupabase,
 };

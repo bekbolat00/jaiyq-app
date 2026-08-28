@@ -349,6 +349,48 @@ export default function MatchDetailSheet({ open, onClose, matchId }: Props) {
                       {showVm.awayScorers}
                     </p>
                   </div>
+
+                  {showVm.fullMatchUrl || showVm.highlightUrl ? (
+                    <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      {showVm.fullMatchUrl ? (
+                        <a
+                          href={showVm.fullMatchUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#0a5c36] to-[#0f8a4f] py-3 text-center text-[10px] font-black uppercase tracking-[0.12em] text-white shadow-[0_0_20px_rgba(15,138,79,0.35)] transition-[transform,filter] active:scale-[0.99] active:brightness-95"
+                        >
+                          <svg
+                            viewBox="0 0 24 24"
+                            fill="currentColor"
+                            className="h-4 w-4 shrink-0"
+                            aria-hidden
+                          >
+                            <circle cx="12" cy="12" r="10" fillOpacity="0.25" />
+                            <path d="M10 8.5v7l6-3.5-6-3.5z" />
+                          </svg>
+                          Смотреть трансляцию
+                        </a>
+                      ) : null}
+                      {showVm.highlightUrl ? (
+                        <a
+                          href={showVm.highlightUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center justify-center gap-2 rounded-2xl border-2 border-[#0f8a4f] bg-[#0a5c36]/15 py-3 text-center text-[10px] font-black uppercase tracking-[0.12em] text-[#3fd68a] shadow-[0_0_16px_rgba(15,138,79,0.18)] transition-[transform,filter,background-color] hover:bg-[#0a5c36]/25 active:scale-[0.99]"
+                        >
+                          <svg
+                            viewBox="0 0 24 24"
+                            fill="currentColor"
+                            className="h-4 w-4 shrink-0"
+                            aria-hidden
+                          >
+                            <path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4v-11l-4 4z" />
+                          </svg>
+                          Видеообзор матча
+                        </a>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </div>
 
                 <div

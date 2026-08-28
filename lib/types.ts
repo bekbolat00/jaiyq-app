@@ -62,6 +62,8 @@ export type DbPlayerRow = {
   jersey_number?: number | null;
   position: string;
   is_starter?: boolean | null;
+  /** Фото игрока для тактической доски / карточек состава. */
+  photo_url?: string | null;
 };
 
 export type DbMatchEventRow = {
@@ -224,6 +226,10 @@ export type DbMatchRow = {
   home_team_id?: string | null;
   /** UUID команды гостей. */
   away_team_id?: string | null;
+  /** Ссылка на видеообзор матча (YouTube и т.п.). */
+  highlight_url?: string | null;
+  /** Ссылка на полную трансляцию/повтор матча. */
+  full_match_url?: string | null;
 };
 
 /** Контекст матча для шторки «ZHAIYQ ЭКСПЕРТ». */

@@ -90,39 +90,14 @@ function placeTeamOnPitch(
   return result;
 }
 
-function JerseyIcon({ fill, num }: { fill: string; num: string }) {
-  return (
-    <div className="relative h-10 w-9 shrink-0">
-      <svg viewBox="0 0 36 40" className="h-10 w-9 drop-shadow-lg" aria-hidden>
-        <path
-          d="M4 8 L0 14 L8 17 L8 36 L28 36 L28 17 L36 14 L32 8 L24 11 C22 6 14 6 12 11 Z"
-          fill={fill}
-          stroke="rgba(255,255,255,0.3)"
-          strokeWidth="0.8"
-        />
-        <path
-          d="M12 11 C14 6 22 6 24 11"
-          fill="rgba(255,255,255,0.15)"
-          stroke="none"
-        />
-      </svg>
-      <span className="pointer-events-none absolute inset-0 flex items-center justify-center pt-3 text-[11px] font-black text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.9)]">
-        {num}
-      </span>
-    </div>
-  );
-}
-
 function PlayerChip({
-  num,
   surname,
-  kitColor,
+  photoUrl,
   top,
   left,
 }: {
-  num: string;
   surname: string;
-  kitColor: string;
+  photoUrl: string | null;
   top: string;
   left: string;
 }) {
@@ -132,7 +107,12 @@ function PlayerChip({
       style={{ top, left }}
     >
       <div className="relative flex max-w-[9rem] flex-col items-center gap-1.5">
-        <JerseyIcon fill={kitColor} num={num} />
+        {/* eslint-disable-next-line @next/next/no-img-element -- remote/local player photo URLs */}
+        <img
+          src={photoUrl || "/default-avatar.png"}
+          alt=""
+          className="w-8 h-8 rounded-full border border-white/50 object-cover shadow-lg"
+        />
         <div className="flex max-w-full items-center justify-center gap-1 px-0.5">
           <span className="rounded-md bg-black/65 px-1.5 py-0.5 text-center text-[9px] font-semibold uppercase leading-tight text-white shadow-sm backdrop-blur-[2px] [text-wrap:balance]">
             {surname}
@@ -320,9 +300,8 @@ export default function FormationPitch({
           {homePlaced.map((pl) => (
             <PlayerChip
               key={`h-${pl.id}`}
-              num={pl.num}
               surname={pitchSurnameLabel(pl)}
-              kitColor={pl.kitColor}
+              photoUrl={pl.photoUrl}
               top={pl.top}
               left={pl.left}
             />
@@ -330,9 +309,8 @@ export default function FormationPitch({
           {awayPlaced.map((pl) => (
             <PlayerChip
               key={`a-${pl.id}`}
-              num={pl.num}
               surname={pitchSurnameLabel(pl)}
-              kitColor={pl.kitColor}
+              photoUrl={pl.photoUrl}
               top={pl.top}
               left={pl.left}
             />

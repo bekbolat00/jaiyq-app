@@ -165,6 +165,8 @@ export type LinePlayerRow = {
   surname: string;
   pos: string;
   id: string;
+  /** Фото игрока для фишки на тактической доске (`players.photo_url`). */
+  photoUrl: string | null;
 };
 
 export type LineBlock = {
@@ -199,6 +201,7 @@ function lineFromRow(
     surname: p ? playerSurnameForPitch(p) : surnameFromDisplayLabel(name),
     pos: (r.position_override || p?.position || "—").toUpperCase(),
     id: r.id,
+    photoUrl: p?.photo_url?.trim() || null,
   };
 }
 
@@ -272,6 +275,10 @@ export type MatchDetailViewModel = {
   stats: LiveMatchStatsShape;
   homeSquad: LineBlock;
   awaySquad: LineBlock;
+  /** Ссылка на видеообзор матча, если указана в `matches.highlight_url`. */
+  highlightUrl: string | null;
+  /** Ссылка на полную трансляцию, если указана в `matches.full_match_url`. */
+  fullMatchUrl: string | null;
 };
 
 function sideFromTeamId(
@@ -422,5 +429,7 @@ export function buildMatchDetailViewModel(
     stats,
     homeSquad,
     awaySquad,
+    highlightUrl: m.highlight_url?.trim() || null,
+    fullMatchUrl: m.full_match_url?.trim() || null,
   };
 }

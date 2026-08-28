@@ -59,6 +59,7 @@ function coachRowsFromPosition(players: DbPlayerRow[]): LinePlayerRow[] {
         name,
         surname: playerSurnameForPitch(p) || surnameFromDisplayLabel(name),
         pos: "ТР",
+        photoUrl: p.photo_url?.trim() || null,
       };
     },
   );
@@ -78,6 +79,7 @@ function toLinePlayerFromDb(
     name,
     surname: playerSurnameForPitch(p) || surnameFromDisplayLabel(name),
     pos: (lu?.position_override || p.position || "—").toUpperCase(),
+    photoUrl: p.photo_url?.trim() || null,
   };
 }
 

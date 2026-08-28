@@ -7,6 +7,7 @@ import TeamBadge from "@/app/components/TeamBadge";
 import { PLAYERS } from "@/lib/data/mock";
 import { TEAM_ZHAIYQ } from "@/lib/constants/zhaiyq";
 import { isSupabaseConfigured, supabase } from "@/lib/supabaseClient";
+import { getTelegramInitData } from "@/lib/telegram/getInitData";
 import type { ExpertMatchContext, Team } from "@/lib/types";
 
 type Props = {
@@ -379,39 +380,31 @@ export default function ExpertPredictorSheet({
   const handleSubmit = async () => {
     if (!playerId || !expertMatch) return;
     setSubmitting(true);
-    const savedTgId =
-      typeof window !== "undefined"
-        ? (() => {
-            try {
-              return localStorage.getItem(TG_USER_STORAGE_KEY);
-            } catch {
-              return null;
-            }
-          })()
-        : null;
-    const userId =
-      savedTgId && savedTgId.trim() ? savedTgId.trim() : "guest";
-    const row = {
-      match_id: expertMatch.matchId,
-      home_score: homeScore,
-      away_score: awayScore,
-      first_goal_player: playerId,
-      first_goal_minute: firstGoalMinute,
-      shots_on_target: shots,
-      user_id: userId,
-    };
 
-    if (!isSupabaseConfigured()) {
-      console.error("[ExpertPredictor] Supabase env not configured");
+    const initData = getTelegramInitData();
+    if (!initData) {
+      console.error("[ExpertPredictor] Telegram initData not available");
       setSubmitting(false);
       return;
     }
 
     try {
-      const { error } = await supabase.from("match_predictions").insert(row);
+      const res = await fetch("/api/predictions/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          initData,
+          matchId: expertMatch.matchId,
+          homeScore,
+          awayScore,
+          firstGoalPlayer: playerId,
+          firstGoalMinute,
+          shotsOnTarget: shots,
+        }),
+      });
 
-      if (error) {
-        console.error("[ExpertPredictor] Supabase insert failed:", error);
+      if (!res.ok) {
+        console.error("[ExpertPredictor] submit failed:", res.status, await res.text());
         setSubmitting(false);
         return;
       }
@@ -429,7 +422,7 @@ export default function ExpertPredictorSheet({
         onClose();
       }, 1100);
     } catch (error: unknown) {
-      console.error("[ExpertPredictor] Supabase insert threw:", error);
+      console.error("[ExpertPredictor] submit threw:", error);
       setSubmitting(false);
     }
   };

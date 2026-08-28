@@ -1,129 +1,78 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {
-  localDateYMD,
-  nextLoginStreak,
-  normalizedLoginDate,
-} from "@/lib/dailyLoginReward";
-import { isSupabaseConfigured, supabase } from "@/lib/supabaseClient";
+import { getTelegramInitData } from "@/lib/telegram/getInitData";
 
-const TG_STORAGE_KEY = "tg_user_id";
 const DAILY_BONUS = 10;
-
-function readTelegramId(): number | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = localStorage.getItem(TG_STORAGE_KEY);
-    if (!raw) return null;
-    const n = Number(raw);
-    return Number.isFinite(n) ? n : null;
-  } catch {
-    return null;
-  }
-}
 
 async function sleep(ms: number) {
   await new Promise((r) => setTimeout(r, ms));
 }
 
-type UserEconomyRow = {
-  coins: number | null;
-  login_streak: number | null;
-  last_login_date: string | null;
+type ClaimResponse = {
+  coins: number;
+  loginStreak: number;
+  claimed: boolean;
 };
 
+/**
+ * Начисление ежедневного бонуса теперь идёт через /api/rewards/claim:
+ * сервер сам проверяет подпись initData и пишет coins service-role клиентом.
+ * Раньше сумма считалась и записывалась прямо с клиента — любой мог
+ * подставить чужой/произвольный telegram_id через devtools.
+ */
 export function useDailyZCoins() {
-  const [coins, setCoins] = useState<number | null>(() =>
-    isSupabaseConfigured() ? null : 0,
-  );
+  const [coins, setCoins] = useState<number | null>(null);
   const [rewardOpen, setRewardOpen] = useState(false);
   const [rewardStreak, setRewardStreak] = useState(1);
 
   useEffect(() => {
-    if (!isSupabaseConfigured()) {
-      return;
-    }
-
     let cancelled = false;
 
     async function run() {
-      let telegramId = readTelegramId();
-      for (let i = 0; i < 10 && telegramId == null; i++) {
+      let initData = getTelegramInitData();
+      for (let i = 0; i < 10 && !initData; i++) {
         await sleep(350);
         if (cancelled) return;
-        telegramId = readTelegramId();
+        initData = getTelegramInitData();
       }
-      if (cancelled || telegramId == null) {
+      if (cancelled || !initData) {
         setCoins(0);
         return;
       }
 
-      let user: UserEconomyRow | null = null;
+      let result: ClaimResponse | null = null;
       for (let attempt = 0; attempt < 8; attempt++) {
-        const { data: row, error: selErr } = await supabase
-          .from("users")
-          .select("coins, login_streak, last_login_date")
-          .eq("telegram_id", telegramId)
-          .maybeSingle();
+        const res = await fetch("/api/rewards/claim", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ initData }),
+        });
         if (cancelled) return;
-        if (!selErr && row) {
-          user = row as UserEconomyRow;
+
+        if (res.ok) {
+          result = (await res.json()) as ClaimResponse;
           break;
         }
+        if (res.status !== 409) {
+          console.error("[useDailyZCoins] claim failed", res.status, await res.text());
+          break;
+        }
+        // 409 = профиль ещё не синхронизирован TelegramAuth — подождать и повторить.
         await sleep(400);
       }
 
-      if (!user) {
-        if (!cancelled) setCoins(0);
-        return;
-      }
-      const todayYmd = localDateYMD(new Date());
-      const lastYmd = normalizedLoginDate(user.last_login_date);
-
-      if (lastYmd === todayYmd) {
-        setCoins(user.coins ?? 0);
-        return;
-      }
-
-      const prevCoins = user.coins ?? 0;
-      const prevStreak = user.login_streak ?? 0;
-      const newStreak = nextLoginStreak(lastYmd, todayYmd, prevStreak);
-      const newCoins = prevCoins + DAILY_BONUS;
-      const lastRaw = user.last_login_date;
-
-      let upd = supabase
-        .from("users")
-        .update({
-          coins: newCoins,
-          login_streak: newStreak,
-          last_login_date: todayYmd,
-        })
-        .eq("telegram_id", telegramId);
-
-      if (lastRaw == null || lastRaw === "") {
-        upd = upd.is("last_login_date", null);
-      } else {
-        upd = upd.eq("last_login_date", lastRaw);
-      }
-
-      const { data: updated, error: upErr } = await upd.select("coins, login_streak").maybeSingle();
-
       if (cancelled) return;
-
-      if (upErr || !updated) {
-        const { data: again } = await supabase
-          .from("users")
-          .select("coins, last_login_date")
-          .eq("telegram_id", telegramId)
-          .maybeSingle();
-        if (!cancelled) setCoins(again?.coins ?? prevCoins);
+      if (!result) {
+        setCoins(0);
         return;
       }
 
-      setCoins(updated.coins ?? newCoins);
-      setRewardStreak(updated.login_streak ?? newStreak);
-      setRewardOpen(true);
+      setCoins(result.coins);
+      if (result.claimed) {
+        setRewardStreak(result.loginStreak);
+        setRewardOpen(true);
+      }
     }
 
     void run();

@@ -1,6 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import { motion } from "framer-motion";
+import BuyTicketModal from "@/app/components/BuyTicketModal";
 import MatchScheduleCountdown from "@/app/components/MatchScheduleCountdown";
 import { TEAM_ZHAIYQ } from "@/lib/constants/zhaiyq";
 import type { DbMatchRow } from "@/lib/types";
@@ -30,6 +32,7 @@ export default function UpcomingMatchScheduleCard({
   const opp = opponentTeam(row);
   const left = row.is_home ? TEAM_ZHAIYQ : opp;
   const right = row.is_home ? opp : TEAM_ZHAIYQ;
+  const [ticketModalOpen, setTicketModalOpen] = useState(false);
 
   return (
     <motion.article
@@ -73,6 +76,23 @@ export default function UpcomingMatchScheduleCard({
         </span>
         ZHAIYQ ЭКСПЕРТ
       </button>
+
+      <button
+        type="button"
+        onClick={() => setTicketModalOpen(true)}
+        className="mt-2.5 flex h-12 w-full items-center justify-center gap-2 rounded-2xl border-2 border-accent/70 bg-accent/[0.08] text-[11px] font-black uppercase tracking-[0.14em] text-accent shadow-[0_0_18px_rgba(0,240,255,0.18)] transition-[transform,filter,background-color] hover:bg-accent/[0.14] active:scale-[0.99] sm:text-xs"
+      >
+        <span className="text-base leading-none" aria-hidden>
+          🎟️
+        </span>
+        КУПИТЬ БИЛЕТ
+      </button>
+
+      <BuyTicketModal
+        isOpen={ticketModalOpen}
+        onClose={() => setTicketModalOpen(false)}
+        matchId={row.id}
+      />
     </motion.article>
   );
 }

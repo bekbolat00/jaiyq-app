@@ -120,16 +120,34 @@ export function findTeamByOpponentName<
 >(teams: T[], opponentName: string, excludeId?: string): T | null {
   const target = normalizeTeamLabel(opponentName);
   if (!target) return null;
-  return (
-    teams.find((t) => {
-      if (t.id === excludeId) return false;
-      const candidates = [t.name, t.short_name, t.full_name]
-        .filter(Boolean)
-        .map((s) => normalizeTeamLabel(s as string))
-        .filter(Boolean);
-      return candidates.some((c) => c.includes(target) || target.includes(c));
-    }) ?? null
-  );
+
+  const labelsOf = (t: T) =>
+    [t.name, t.short_name, t.full_name]
+      .filter(Boolean)
+      .map((s) => normalizeTeamLabel(s as string))
+      .filter(Boolean);
+  const pool = teams.filter((t) => t.id !== excludeId);
+
+  // Точное совпадение приоритетнее подстроки: иначе «Кайрат» матчится на
+  // «Кайрат-Жастар» (одно название — префикс другого) и в матч-центр
+  // попадает состав чужой команды.
+  const exact = pool.find((t) => labelsOf(t).includes(target));
+  if (exact) return exact;
+
+  // Подстрока — только при высокой схожести длин: «Кайрат» и
+  // «Кайрат-Жастар» разные клубы, хотя одно название — префикс другого.
+  const similarEnough = (c: string) =>
+    (c.includes(target) || target.includes(c)) &&
+    Math.min(c.length, target.length) / Math.max(c.length, target.length) >= 0.8;
+
+  const partial = pool
+    .filter((t) => labelsOf(t).some(similarEnough))
+    .sort((a, b) => {
+      const closest = (t: T) =>
+        Math.min(...labelsOf(t).map((c) => Math.abs(c.length - target.length)));
+      return closest(a) - closest(b);
+    });
+  return partial[0] ?? null;
 }
 
 /** Определяет UUID хозяев/гостей в строках статов и заявок. */

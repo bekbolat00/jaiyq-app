@@ -42,10 +42,23 @@ const COMPETITION_LABEL = "ПЕРВАЯ ЛИГА КАЗАХСТАНА 2026";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/**
+ * Ключ для сравнения названий и фамилий. Казахские буквы сводим к
+ * русским аналогам: KFF пишет «Мұхаметжанов»/«Бердәулетов», а в нашей
+ * БД те же игроки заведены как «МУХАМЕТЖАНОВ»/«БЕРДАУЛЕТОВ», и без этого
+ * они не находятся. Номер формы в сопоставлении всё равно участвует,
+ * так что разные игроки со схожими фамилиями не слипнутся.
+ */
+const LETTER_FOLD = {
+  ё: "е", ұ: "у", ү: "у", ә: "а", і: "и", ғ: "г",
+  қ: "к", ң: "н", ө: "о", һ: "х",
+};
+
 function normalizeLabel(s) {
   return String(s || "")
     .toLowerCase()
-    .replace(/[^a-zа-яёіғқңөұүh0-9]+/gi, "");
+    .replace(/[ёұүәігқңөһ]/g, (c) => LETTER_FOLD[c] ?? c)
+    .replace(/[^a-zа-я0-9]+/gi, "");
 }
 
 function isZhaiyqName(name) {
@@ -96,9 +109,10 @@ async function fetchSeasonGames(teamId, seasonId) {
 // ---------------------------------------------------------------------------
 
 class Importer {
-  constructor(supabase, { dryRun }) {
+  constructor(supabase, { dryRun, competition }) {
     this.sb = supabase;
     this.dryRun = dryRun;
+    this.competition = competition || COMPETITION_LABEL;
     this.teams = [];
     this.playersByTeam = new Map();
     this.matches = [];
@@ -144,14 +158,31 @@ class Importer {
     return rows;
   }
 
+  /**
+   * Сначала точное совпадение, и только потом — по подстроке, выбирая
+   * ближайшую по длине. Иначе «Кайрат» цепляется к «Кайрат-Жастар»
+   * (одно название — префикс другого) и игроки уезжают не в ту команду.
+   */
   findTeam(name) {
     const target = normalizeLabel(name);
-    return (
-      this.teams.find((t) => {
-        const cand = normalizeLabel(t.name ?? "");
-        return cand && (cand.includes(target) || target.includes(cand));
-      }) ?? null
-    );
+    if (!target) return null;
+    const exact = this.teams.find((t) => normalizeLabel(t.name ?? "") === target);
+    if (exact) return exact;
+    // Подстрока допускается только при высокой схожести длин: «кайрат»
+    // и «кайратжастар» — разные клубы, хотя одно является префиксом
+    // другого, и брать их за одну команду нельзя.
+    const partial = this.teams
+      .filter((t) => {
+        const c = normalizeLabel(t.name ?? "");
+        if (!c || !(c.includes(target) || target.includes(c))) return false;
+        return Math.min(c.length, target.length) / Math.max(c.length, target.length) >= 0.8;
+      })
+      .sort(
+        (a, b) =>
+          Math.abs(normalizeLabel(a.name ?? "").length - target.length) -
+          Math.abs(normalizeLabel(b.name ?? "").length - target.length),
+      );
+    return partial[0] ?? null;
   }
 
   async findOrCreateTeam(name, logoUrl) {
@@ -326,7 +357,7 @@ class Importer {
       is_home: isHome,
       zhaiyq_score: status === "finished" ? zhaiyqScore : null,
       opponent_score: status === "finished" ? opponentScore : null,
-      competition: COMPETITION_LABEL,
+      competition: this.competition,
       status,
       match_details: null,
     };
@@ -587,11 +618,17 @@ async function main() {
   const positionsOnly = args.includes("--positions");
   const onlyIdx = args.indexOf("--only");
   const onlyId = onlyIdx !== -1 ? args[onlyIdx + 1] : null;
+  // Турниры на KFF — это разные «сезоны»: 204 — Первая лига, 202 — Кубок.
+  const seasonIdx = args.indexOf("--season");
+  const seasonArg = seasonIdx !== -1 ? Number(args[seasonIdx + 1]) : null;
+  // Подпись турнира в `matches.competition` для новых строк.
+  const compIdx = args.indexOf("--competition");
+  const competition = compIdx !== -1 ? args[compIdx + 1] : null;
 
   const supabase = createSupabaseAdmin();
 
   if (positionsOnly) {
-    const { seasonId, games } = await fetchSeasonGames(ZHAIYQ_KFF_TEAM_ID, null);
+    const { seasonId, games } = await fetchSeasonGames(ZHAIYQ_KFF_TEAM_ID, seasonArg);
     const r = await syncCanonicalPositions(supabase, seasonId, games, { dryRun });
     console.error(
       `${dryRun ? "[DRY-RUN] " : ""}Позиции обновлены у ${r.updated} игрок(ов).` +
@@ -600,10 +637,10 @@ async function main() {
     return;
   }
 
-  const importer = new Importer(supabase, { dryRun });
+  const importer = new Importer(supabase, { dryRun, competition });
   await importer.loadState();
 
-  const { seasonId, games } = await fetchSeasonGames(ZHAIYQ_KFF_TEAM_ID, null);
+  const { seasonId, games } = await fetchSeasonGames(ZHAIYQ_KFF_TEAM_ID, seasonArg);
   const targets = onlyId ? games.filter((g) => String(g.id) === onlyId) : games;
 
   console.error(

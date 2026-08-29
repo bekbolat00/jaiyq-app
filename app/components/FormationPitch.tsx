@@ -41,39 +41,34 @@ function toProfilePlayer(p: LinePlayerRow, teamName: string): ProfileModalPlayer
   };
 }
 
-const POSITION_COLUMN: Record<string, number> = {
-  вр: 0,
-  gk: 0,
-  зщ: 1,
-  cb: 1,
-  lb: 1,
-  rb: 1,
-  wb: 1,
-  пз: 2,
-  cm: 2,
-  cdm: 2,
-  cam: 2,
-  lm: 2,
-  rm: 2,
-  нп: 3,
-  cf: 3,
-  lw: 3,
-  rw: 3,
-  st: 3,
-};
+/**
+ * Колонка на схеме (0=вратарь .. 3=нападающий) по позиции игрока.
+ * Нормализует вход регуляркой вместо точного словаря — реальные значения
+ * встречаются и как «вр/зщ/пз/нп», и как полные слова/английские коды,
+ * если что-то не прошло через маппинг скрапера.
+ */
+function normalizePosColumn(raw: string): 0 | 1 | 2 | 3 {
+  const p = raw.toLowerCase().replace(/[^a-zа-яё]/g, "");
+  if (/^(вр|врат|gk|кипер|goal)/.test(p)) return 0;
+  if (/^(зщ|защ|cb|lb|rb|wb|lwb|rwb|def)/.test(p)) return 1;
+  if (/^(пз|полуз|cm|cdm|cam|dm|am|lm|rm|mid)/.test(p)) return 2;
+  return 3;
+}
 
 function pitchPosKey(p: LinePlayerRow): string {
   return (
     p.pos ??
     (p as LinePlayerRow & { position?: string }).position ??
     ""
-  )
-    .toLowerCase()
-    .trim();
+  ).trim();
 }
 
-const PITCH_WIDTH = 720;
-const PITCH_HEIGHT = 440;
+function shirtNumber(p: LinePlayerRow): number {
+  const n = Number.parseInt(String(p.num).replace(/\D/g, ""), 10);
+  return Number.isFinite(n) ? n : 999;
+}
+
+const PITCH_RATIO = 720 / 440;
 
 /**
  * Горизонтальная схема (как на референсе): хозяева выстроены слева направо
@@ -86,16 +81,12 @@ function placeTeamOnPitch(
   kitColor: string,
 ): PitchPlaced[] {
   const fieldPlayers = players.filter((p) => {
-    const pos = pitchPosKey(p);
-    return pos !== "главный тренер" && pos !== "помощник тренера";
+    const pos = pitchPosKey(p).toLowerCase();
+    return !pos.includes("тренер");
   });
   const columns: Record<number, LinePlayerRow[]> = { 0: [], 1: [], 2: [], 3: [] };
   for (const p of fieldPlayers) {
-    const pos = pitchPosKey(p);
-    const col =
-      POSITION_COLUMN[pos] ??
-      (pos === "вр" ? 0 : pos === "зщ" ? 1 : pos === "пз" ? 2 : 3);
-    columns[col].push(p);
+    columns[normalizePosColumn(pitchPosKey(p))].push(p);
   }
 
   // left% для каждой колонки: fromLeft=true — вратарь у левого края, атака
@@ -104,7 +95,9 @@ function placeTeamOnPitch(
 
   const result: PitchPlaced[] = [];
   for (const colIdx of [0, 1, 2, 3]) {
-    const group = columns[colIdx];
+    // Явно сортируем по номеру формы — порядок из БД/заявки не гарантирует
+    // ничего про расположение на поле, а так хотя бы детерминированно.
+    const group = [...columns[colIdx]].sort((a, b) => shirtNumber(a) - shirtNumber(b));
     if (!group.length) continue;
     const left = leftByColumn[colIdx]!;
     group.forEach((p, i) => {
@@ -143,7 +136,7 @@ function PlayerChip({
         className="pointer-events-auto flex flex-col items-center gap-1 transition-transform active:scale-95"
       >
         <div
-          className="h-11 w-11 shrink-0 overflow-hidden rounded-full bg-[#e4e7ec]"
+          className="h-[clamp(28px,9cqw,44px)] w-[clamp(28px,9cqw,44px)] shrink-0 overflow-hidden rounded-full bg-[#e4e7ec]"
           style={{ boxShadow: `0 0 0 2px ${kitColor}, 0 2px 6px rgba(0,0,0,0.25)` }}
         >
           {/* eslint-disable-next-line @next/next/no-img-element -- remote/local player photo URLs */}
@@ -153,7 +146,7 @@ function PlayerChip({
             className="h-full w-full object-cover"
           />
         </div>
-        <span className="max-w-[78px] truncate text-center text-[10px] font-bold leading-tight text-[#1c2230]">
+        <span className="max-w-[clamp(48px,16cqw,78px)] truncate text-center text-[clamp(8px,2.4cqw,10px)] font-bold leading-tight text-[#1c2230]">
           {num} {surname}
         </span>
       </button>
@@ -333,44 +326,42 @@ export default function FormationPitch({
 
   return (
     <div className="w-full">
-      <div className="no-scrollbar -mx-3 overflow-x-auto pb-1 sm:-mx-4">
-        <div className="relative mx-3 sm:mx-4" style={{ width: PITCH_WIDTH }}>
-          <PitchHeaderBar
-            home={home}
-            away={away}
-            homeFormation={homeFormation}
-            awayFormation={awayFormation}
-          />
-          <div
-            className="relative overflow-hidden rounded-b-xl border border-t-0 border-gray-300 bg-[#f6f7f9]"
-            style={{ height: PITCH_HEIGHT }}
-          >
-            <PitchMarkings />
-            {homePlaced.map((pl) => (
-              <PlayerChip
-                key={`h-${pl.id}`}
-                num={pl.num}
-                surname={pitchSurnameLabel(pl)}
-                photoUrl={pl.photoUrl}
-                top={pl.top}
-                left={pl.left}
-                kitColor={pl.kitColor}
-                onClick={() => setActivePlayer(toProfilePlayer(pl, home.shortName))}
-              />
-            ))}
-            {awayPlaced.map((pl) => (
-              <PlayerChip
-                key={`a-${pl.id}`}
-                num={pl.num}
-                surname={pitchSurnameLabel(pl)}
-                photoUrl={pl.photoUrl}
-                top={pl.top}
-                left={pl.left}
-                kitColor={pl.kitColor}
-                onClick={() => setActivePlayer(toProfilePlayer(pl, away.shortName))}
-              />
-            ))}
-          </div>
+      <div className="relative w-full" style={{ containerType: "inline-size" }}>
+        <PitchHeaderBar
+          home={home}
+          away={away}
+          homeFormation={homeFormation}
+          awayFormation={awayFormation}
+        />
+        <div
+          className="relative w-full overflow-hidden rounded-b-xl border border-t-0 border-gray-300 bg-[#f6f7f9]"
+          style={{ aspectRatio: String(PITCH_RATIO) }}
+        >
+          <PitchMarkings />
+          {homePlaced.map((pl) => (
+            <PlayerChip
+              key={`h-${pl.id}`}
+              num={pl.num}
+              surname={pitchSurnameLabel(pl)}
+              photoUrl={pl.photoUrl}
+              top={pl.top}
+              left={pl.left}
+              kitColor={pl.kitColor}
+              onClick={() => setActivePlayer(toProfilePlayer(pl, home.shortName))}
+            />
+          ))}
+          {awayPlaced.map((pl) => (
+            <PlayerChip
+              key={`a-${pl.id}`}
+              num={pl.num}
+              surname={pitchSurnameLabel(pl)}
+              photoUrl={pl.photoUrl}
+              top={pl.top}
+              left={pl.left}
+              kitColor={pl.kitColor}
+              onClick={() => setActivePlayer(toProfilePlayer(pl, away.shortName))}
+            />
+          ))}
         </div>
       </div>
 

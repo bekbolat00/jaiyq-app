@@ -11,7 +11,7 @@ import {
 } from "react";
 import ScreenHeader from "../components/ScreenHeader";
 import TabEnterMotion from "../components/TabEnterMotion";
-import DigitalTicket from "../components/DigitalTicket";
+import MyTicketsSection from "../components/MyTicketsSection";
 import NotificationBellButton from "../components/NotificationBellButton";
 import NotificationsSheet from "../components/NotificationsSheet";
 import AvatarUploadSheet, {
@@ -22,8 +22,6 @@ import { CURRENT_USER, NOTIFICATIONS, TICKETS } from "@/lib/data/mock";
 import { isSupabaseConfigured, supabase } from "@/lib/supabaseClient";
 
 const AVATAR_MAX_FILE_BYTES = 5 * 1024 * 1024;
-
-type Filter = "active" | "archived";
 
 type Rank = {
   id: string;
@@ -53,7 +51,6 @@ const ACHIEVEMENTS: Achievement[] = [
 const HEX_CLIP = "polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%)";
 
 export default function ProfilePage() {
-  const [filter, setFilter] = useState<Filter>("active");
   const [pushAway, setPushAway] = useState(CURRENT_USER.pushAwayMatches);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [avatarSheetOpen, setAvatarSheetOpen] = useState(false);
@@ -172,11 +169,6 @@ export default function ProfilePage() {
       }
     })();
   }, []);
-
-  const tickets = useMemo(
-    () => TICKETS.filter((t) => t.status === filter),
-    [filter],
-  );
 
   const matchesAttended = TICKETS.filter((t) => t.status === "archived").length || 1;
 
@@ -399,43 +391,11 @@ export default function ProfilePage() {
 
       {/* Tickets inventory */}
       <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="px-1 text-[12px] font-bold uppercase tracking-widest text-muted">
-            Мои билеты
-          </h2>
-          <div className="glass-premium relative grid grid-cols-2 rounded-xl p-0.5 text-[12px]">
-            <span
-              aria-hidden
-              className={`absolute inset-y-0.5 w-[calc(50%-2px)] rounded-lg bg-accent/15 ring-1 ring-accent/40 transition-transform ${
-                filter === "active" ? "translate-x-0.5" : "translate-x-[calc(100%+1px)]"
-              }`}
-            />
-            {(["active", "archived"] as Filter[]).map((f) => (
-              <button
-                key={f}
-                type="button"
-                onClick={() => setFilter(f)}
-                className={`relative z-10 px-3 py-1.5 font-semibold ${
-                  filter === f ? "neon-cyan text-accent" : "text-muted"
-                }`}
-              >
-                {f === "active" ? "Активные" : "ИСТОРИЯ"}
-              </button>
-            ))}
-          </div>
-        </div>
+        <h2 className="px-1 text-[12px] font-bold uppercase tracking-widest text-muted">
+          Мои билеты
+        </h2>
 
-        {tickets.length === 0 ? (
-          <div className="glass-premium rounded-2xl p-6 text-center text-[13px] text-muted">
-            Билетов пока нет.
-          </div>
-        ) : (
-          <div className="flex flex-col gap-4">
-            {tickets.map((t) => (
-              <DigitalTicket key={t.id} ticket={t} />
-            ))}
-          </div>
-        )}
+        <MyTicketsSection />
       </section>
       </TabEnterMotion>
 

@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { authenticateTelegramRequest, TelegramAuthError } from "@/lib/telegram/authenticateRequest";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -12,10 +13,13 @@ function isNonEmptyString(v: unknown): v is string {
 }
 
 /**
- * Создаёт заявку на билет со статусом "pending" (ручное подтверждение оплаты
- * через Kaspi). Личность подтверждается подписанным Telegram initData —
- * та же схема, что и /api/predictions/submit, /api/rewards/claim: без этого
- * анонимный клиент мог бы вписать произвольный user_telegram_id.
+ * Создаёт заявку на билет со статусом "pending" (оплата через Kaspi
+ * подтверждается вручную) и сразу выдаёт ему `qr_hash` — секрет, который
+ * позже кодируется в QR-код и гасится сканером на входе.
+ *
+ * Личность подтверждается подписанным Telegram initData — та же схема,
+ * что и /api/predictions/submit, /api/rewards/claim: без этого анонимный
+ * клиент мог бы вписать произвольный user_telegram_id.
  */
 export async function POST(request: Request) {
   let body: PurchaseTicketBody;
@@ -40,17 +44,47 @@ export async function POST(request: Request) {
   }
 
   const admin = getSupabaseAdminClient();
-  const { error } = await admin.from("tickets").insert({
-    match_id: body.matchId,
-    user_telegram_id: String(user.id),
-    status: "pending",
-    is_used: false,
-  });
+
+  // Один активный билет на матч: повторное нажатие «Купить» не должно
+  // плодить заявки, иначе у болельщика окажется пачка QR на один вход.
+  const { data: existing, error: existingError } = await admin
+    .from("tickets")
+    .select("id, status, qr_hash")
+    .eq("match_id", body.matchId)
+    .eq("user_telegram_id", String(user.id))
+    .in("status", ["pending", "paid"])
+    .maybeSingle();
+
+  if (existingError) {
+    console.error("[api/tickets/purchase] lookup failed", existingError);
+    return NextResponse.json({ error: "purchase failed" }, { status: 500 });
+  }
+
+  if (existing) {
+    return NextResponse.json({
+      ok: true,
+      ticketId: existing.id,
+      status: existing.status,
+      alreadyExists: true,
+    });
+  }
+
+  const { data, error } = await admin
+    .from("tickets")
+    .insert({
+      match_id: body.matchId,
+      user_telegram_id: String(user.id),
+      status: "pending",
+      is_used: false,
+      qr_hash: randomUUID(),
+    })
+    .select("id, status")
+    .single();
 
   if (error) {
     console.error("[api/tickets/purchase] insert failed", error);
     return NextResponse.json({ error: "purchase failed" }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, ticketId: data.id, status: data.status });
 }

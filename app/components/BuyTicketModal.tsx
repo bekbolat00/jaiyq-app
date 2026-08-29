@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { getTelegramInitData } from "@/lib/telegram/getInitData";
 
@@ -10,9 +10,12 @@ type Props = {
   matchId: string;
 };
 
-const KASPI_PHONE = "+7 777 123 45 67";
-const KASPI_NAME = "Иванов И.";
+/** Ссылка на оплату Kaspi (статическая витрина клуба). */
+const KASPI_PAY_URL = "https://pay.kaspi.kz/pay/0o2tyjk1";
 const TICKET_PRICE = "1 000 ₸";
+
+/** pick — выбор билета, pay — оплата в Kaspi, done — заявка подтверждена. */
+type Step = "pick" | "pay" | "done";
 
 const backdrop = {
   hidden: { opacity: 0 },
@@ -57,15 +60,17 @@ function KaspiIcon({ className }: { className?: string }) {
 }
 
 export default function BuyTicketModal({ isOpen, onClose, matchId }: Props) {
-  const [submitting, setSubmitting] = useState(false);
-  const [showSuccess, setShowSuccess] = useState(false);
+  const [step, setStep] = useState<Step>("pick");
+  const [ticketId, setTicketId] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (isOpen) return;
     /* eslint-disable react-hooks/set-state-in-effect -- сброс UI при закрытии */
-    setSubmitting(false);
-    setShowSuccess(false);
+    setStep("pick");
+    setTicketId(null);
+    setBusy(false);
     setErrorMessage(null);
     /* eslint-enable react-hooks/set-state-in-effect */
   }, [isOpen]);
@@ -75,51 +80,81 @@ export default function BuyTicketModal({ isOpen, onClose, matchId }: Props) {
     const original = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape" && !busy) onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => {
       document.body.style.overflow = original;
       window.removeEventListener("keydown", onKey);
     };
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose, busy]);
 
-  const handlePaid = async () => {
+  /** Шаг 1: заводим билет со статусом `pending` и его QR-секретом. */
+  const createTicket = useCallback(async () => {
     setErrorMessage(null);
-    setSubmitting(true);
-
     const initData = getTelegramInitData();
     if (!initData) {
-      setErrorMessage("Откройте приложение через Telegram, чтобы оформить заявку.");
-      setSubmitting(false);
+      setErrorMessage("Откройте приложение через Telegram, чтобы купить билет.");
       return;
     }
 
+    setBusy(true);
     try {
       const res = await fetch("/api/tickets/purchase", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ initData, matchId }),
       });
+      const json = (await res.json()) as { ticketId?: string; status?: string };
 
-      if (!res.ok) {
-        console.error("[BuyTicketModal] purchase failed:", res.status, await res.text());
-        setErrorMessage("Не удалось отправить заявку. Попробуйте ещё раз.");
-        setSubmitting(false);
+      if (!res.ok || !json.ticketId) {
+        setErrorMessage("Не удалось оформить билет. Попробуйте ещё раз.");
         return;
       }
 
-      setSubmitting(false);
-      setShowSuccess(true);
-      window.setTimeout(() => {
-        onClose();
-      }, 1600);
+      setTicketId(json.ticketId);
+      // Уже оплаченный билет второй раз оплачивать не нужно.
+      setStep(json.status === "paid" ? "done" : "pay");
     } catch (error: unknown) {
       console.error("[BuyTicketModal] purchase threw:", error);
-      setErrorMessage("Не удалось отправить заявку. Попробуйте ещё раз.");
-      setSubmitting(false);
+      setErrorMessage("Не удалось оформить билет. Попробуйте ещё раз.");
+    } finally {
+      setBusy(false);
     }
-  };
+  }, [matchId]);
+
+  /** Шаг 2: болельщик вернулся из Kaspi и подтверждает оплату. */
+  const confirmPaid = useCallback(async () => {
+    if (!ticketId) return;
+    setErrorMessage(null);
+    const initData = getTelegramInitData();
+    if (!initData) {
+      setErrorMessage("Откройте приложение через Telegram.");
+      return;
+    }
+
+    setBusy(true);
+    try {
+      const res = await fetch("/api/tickets/confirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ initData, ticketId }),
+      });
+
+      if (!res.ok) {
+        setErrorMessage("Не удалось подтвердить оплату. Попробуйте ещё раз.");
+        return;
+      }
+
+      setStep("done");
+      window.setTimeout(onClose, 2200);
+    } catch (error: unknown) {
+      console.error("[BuyTicketModal] confirm threw:", error);
+      setErrorMessage("Не удалось подтвердить оплату. Попробуйте ещё раз.");
+    } finally {
+      setBusy(false);
+    }
+  }, [ticketId, onClose]);
 
   return (
     <AnimatePresence>
@@ -160,25 +195,18 @@ export default function BuyTicketModal({ isOpen, onClose, matchId }: Props) {
               type="button"
               aria-label="Закрыть"
               onClick={onClose}
-              disabled={submitting}
+              disabled={busy}
               className="absolute right-3 top-3 z-20 flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-black/50 text-foreground backdrop-blur-md transition-colors hover:bg-black/60 disabled:pointer-events-none disabled:opacity-40"
             >
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                className="h-5 w-5"
-                aria-hidden
-              >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5" aria-hidden>
                 <path d="m6 6 12 12M18 6 6 18" />
               </svg>
             </button>
 
             <AnimatePresence mode="wait">
-              {showSuccess ? (
+              {step === "done" ? (
                 <motion.div
-                  key="success"
+                  key="done"
                   initial={{ opacity: 0, scale: 0.85 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 1.05 }}
@@ -189,7 +217,7 @@ export default function BuyTicketModal({ isOpen, onClose, matchId }: Props) {
                     initial={{ scale: 0, rotate: -40 }}
                     animate={{ scale: 1, rotate: 0 }}
                     transition={{ type: "spring", stiffness: 400, damping: 22, delay: 0.05 }}
-                    className="flex h-24 w-24 items-center justify-center rounded-full border-2 border-accent bg-accent/15 neon-cyan-surface shadow-[0_0_40px_rgba(0,240,255,0.35)]"
+                    className="neon-cyan-surface flex h-24 w-24 items-center justify-center rounded-full border-2 border-accent bg-accent/15 shadow-[0_0_40px_rgba(0,240,255,0.35)]"
                   >
                     <svg
                       viewBox="0 0 24 24"
@@ -210,73 +238,105 @@ export default function BuyTicketModal({ isOpen, onClose, matchId }: Props) {
                     </svg>
                   </motion.div>
                   <p className="text-center text-lg font-black uppercase tracking-wide text-foreground">
-                    Заявка отправлена!
+                    Билет ваш!
                   </p>
                   <p className="max-w-[260px] text-center text-xs font-medium leading-relaxed text-white/50">
-                    QR-код появится после проверки платежа.
+                    QR-код для прохода — в разделе «Профиль» → «Мои билеты».
                   </p>
                 </motion.div>
-              ) : (
+              ) : step === "pay" ? (
                 <motion.div
-                  key="form"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
+                  key="pay"
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
                   className="flex flex-col px-5 pb-8 pt-12"
                 >
-                  <h2
-                    id="buy-ticket-title"
-                    className="text-center text-lg font-black uppercase tracking-tight text-foreground"
-                  >
-                    Оплата билета
+                  <h2 id="buy-ticket-title" className="text-center text-lg font-black uppercase tracking-tight text-foreground">
+                    Оплата в Kaspi
                   </h2>
 
                   <p className="mt-3 text-center text-5xl font-black tracking-tight text-white drop-shadow-[0_0_24px_rgba(0,240,255,0.15)]">
                     {TICKET_PRICE}
                   </p>
 
-                  <div className="mt-6 space-y-3 rounded-2xl border border-white/[0.09] bg-white/[0.03] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-                    <p className="text-sm font-medium leading-relaxed text-foreground/90">
-                      1. Переведите сумму на Kaspi Gold по номеру{" "}
-                      <span className="font-black text-white">{KASPI_PHONE}</span> ({KASPI_NAME}).
-                    </p>
-                    <p className="rounded-xl border border-orange-500/30 bg-orange-500/10 px-3 py-2.5 text-xs font-bold leading-relaxed text-orange-400">
-                      В сообщении к переводу обязательно укажите ваш никнейм!
-                    </p>
-                  </div>
+                  <a
+                    href={KASPI_PAY_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-6 flex w-full items-center justify-center gap-2.5 rounded-2xl bg-[#e11f26] py-4 text-sm font-black uppercase tracking-widest text-white shadow-[0_0_28px_rgba(225,31,38,0.4)] transition-[transform,filter] active:scale-[0.99] active:brightness-95"
+                  >
+                    <KaspiIcon className="h-6 w-6 text-white" />
+                    Оплатить через Kaspi
+                  </a>
+
+                  <p className="mt-4 rounded-2xl border border-white/[0.09] bg-white/[0.03] px-4 py-3 text-center text-[13px] font-medium leading-relaxed text-foreground/85">
+                    Пожалуйста, завершите оплату в приложении Kaspi. После успешной
+                    оплаты нажмите кнопку ниже.
+                  </p>
 
                   {errorMessage && (
                     <p className="mt-3 text-center text-xs font-bold text-red-400">{errorMessage}</p>
                   )}
 
-                  <div className="mt-6 flex flex-col gap-3">
-                    <a
-                      href="https://kaspi.kz"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#e11f26] py-3.5 text-xs font-black uppercase tracking-widest text-white shadow-[0_0_24px_rgba(225,31,38,0.35)] transition-[transform,filter] active:scale-[0.99] active:brightness-95"
-                    >
-                      <KaspiIcon className="h-5 w-5 text-white" />
-                      Открыть приложение Kaspi
-                    </a>
+                  <motion.button
+                    type="button"
+                    disabled={busy}
+                    onClick={confirmPaid}
+                    whileTap={{ scale: 0.98 }}
+                    className="neon-cyan-surface mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-accent py-4 text-sm font-black uppercase tracking-widest text-black shadow-[0_0_28px_rgba(0,240,255,0.4)] transition-[transform,filter] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {busy ? (
+                      <>
+                        <Spinner className="h-5 w-5 text-black" />
+                        <span>Проверяем…</span>
+                      </>
+                    ) : (
+                      "Я оплатил"
+                    )}
+                  </motion.button>
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="pick"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0, x: -20 }}
+                  className="flex flex-col px-5 pb-8 pt-12"
+                >
+                  <h2 id="buy-ticket-title" className="text-center text-lg font-black uppercase tracking-tight text-foreground">
+                    Билет на матч
+                  </h2>
 
-                    <motion.button
-                      type="button"
-                      disabled={submitting}
-                      onClick={handlePaid}
-                      whileTap={{ scale: 0.98 }}
-                      className="neon-cyan-surface flex w-full items-center justify-center gap-2 rounded-2xl bg-accent py-3.5 text-xs font-black uppercase tracking-widest text-black shadow-[0_0_28px_rgba(0,240,255,0.4)] transition-[transform,filter] disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {submitting ? (
-                        <>
-                          <Spinner className="h-5 w-5 text-black" />
-                          <span>Отправка…</span>
-                        </>
-                      ) : (
-                        "Я оплатил"
-                      )}
-                    </motion.button>
-                  </div>
+                  <p className="mt-3 text-center text-5xl font-black tracking-tight text-white drop-shadow-[0_0_24px_rgba(0,240,255,0.15)]">
+                    {TICKET_PRICE}
+                  </p>
+
+                  <p className="mt-4 text-center text-[13px] font-medium leading-relaxed text-white/60">
+                    Оформим билет и откроем оплату Kaspi. QR-код для прохода
+                    появится в вашем профиле.
+                  </p>
+
+                  {errorMessage && (
+                    <p className="mt-3 text-center text-xs font-bold text-red-400">{errorMessage}</p>
+                  )}
+
+                  <motion.button
+                    type="button"
+                    disabled={busy}
+                    onClick={createTicket}
+                    whileTap={{ scale: 0.98 }}
+                    className="neon-cyan-surface mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-accent py-4 text-sm font-black uppercase tracking-widest text-black shadow-[0_0_28px_rgba(0,240,255,0.4)] transition-[transform,filter] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {busy ? (
+                      <>
+                        <Spinner className="h-5 w-5 text-black" />
+                        <span>Оформляем…</span>
+                      </>
+                    ) : (
+                      "Перейти к оплате"
+                    )}
+                  </motion.button>
                 </motion.div>
               )}
             </AnimatePresence>

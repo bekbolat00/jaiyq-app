@@ -291,6 +291,37 @@ export type Ticket = {
   goals?: GoalEvent[];
 };
 
+/** Жизненный цикл билета: заявка → оплачен → предъявлен на входе. */
+export type TicketStatus = "pending" | "paid" | "used";
+
+/** Строка `public.tickets` (реальная схема). */
+export type DbTicketRow = {
+  id: string;
+  match_id: string;
+  user_telegram_id: string;
+  status: TicketStatus;
+  /** Секрет, который кодируется в QR. Одноразовый: гасится при сканировании. */
+  qr_hash: string | null;
+  /** Момент прохода на стадион (ISO), проставляется сканером. */
+  scanned_at: string | null;
+  is_used: boolean | null;
+  created_at: string | null;
+};
+
+/** Билет + данные матча для раздела «Мои билеты». */
+export type MyTicket = {
+  id: string;
+  status: TicketStatus;
+  qrHash: string | null;
+  scannedAt: string | null;
+  matchId: string;
+  opponent: string;
+  /** ISO-дата матча. */
+  matchDate: string;
+  isHome: boolean;
+  competition: string;
+};
+
 export type UserProfile = {
   id: string;
   displayName: string;

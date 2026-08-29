@@ -103,9 +103,16 @@ export function isZhaiyqTeamName(
   return a.includes("жай") || a.includes("zhaiyq");
 }
 
-/** Совпадение по названию: `matches.opponent` (текст) против `teams.name`/`short_name`/`full_name`. */
+/**
+ * Совпадение по названию: `matches.opponent` (текст) против
+ * `teams.name`/`short_name`/`full_name`. «ё» сводим к «е», чтобы
+ * «Шахтёр» и «Шахтер» считались одной командой.
+ */
 export function normalizeTeamLabel(s: string): string {
-  return s.toLowerCase().replace(/[^a-zа-яёіғқңөұүh0-9]+/gi, "");
+  return s
+    .toLowerCase()
+    .replace(/ё/g, "е")
+    .replace(/[^a-zа-яіғқңөұүh0-9]+/gi, "");
 }
 
 export function findTeamByOpponentName<
@@ -289,16 +296,14 @@ function toLineBlock(
     (r) =>
       r.is_coach !== true && String(r.role ?? "").toLowerCase() !== "coach",
   );
-  const bench = other.filter(
-    (r) =>
-      r.is_substitute === true ||
-      String(r.role ?? "").toLowerCase() === "bench",
-  );
-  const startersCands = other.filter(
-    (r) =>
-      r.is_substitute !== true &&
-      String(r.role ?? "").toLowerCase() !== "bench",
-  );
+  // Реальная схема `match_lineups` в этой БД — `is_starter` (boolean);
+  // `is_substitute`/`role` поддерживаем на случай другой схемы.
+  const isBenchRow = (r: DbMatchLineupRow) =>
+    r.is_starter === false ||
+    r.is_substitute === true ||
+    String(r.role ?? "").toLowerCase() === "bench";
+  const bench = other.filter(isBenchRow);
+  const startersCands = other.filter((r) => !isBenchRow(r));
   const hasBench = bench.length > 0;
   const sortedCands = sortLineupRows(startersCands);
   const starterLines: LinePlayerRow[] = hasBench

@@ -127,6 +127,8 @@ export type DbMatchLineupRow = {
   match_id: string;
   team_id: string;
   player_id: string;
+  /** Реальная схема `public.match_lineups`: стартовый состав vs запасные. */
+  is_starter?: boolean | null;
   role?: MatchLineupRole;
   is_substitute?: boolean | null;
   is_coach?: boolean | null;

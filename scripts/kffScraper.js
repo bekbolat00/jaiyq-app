@@ -94,11 +94,30 @@ function collectInlineScripts(html) {
 }
 
 /**
+ * Снимает экранирование JS-строкового литерала, в который Next.js завернул
+ * RSC-пейлоад.
+ *
+ * Наивная замена `\"` -> `"` здесь неверна: часть значений сама содержит
+ * экранированные кавычки (например, `video_review_url` у некоторых матчей —
+ * это HTML `<iframe width=\\\"560\\\" ...>`, а не голый URL). В сырой строке
+ * такая кавычка выглядит как `\\\"`, и «умная» замена оставляет от неё `\\"`,
+ * что рвёт JSON. Правильный путь — распарсить фрагмент именно как строковый
+ * литерал (это заодно раскрывает `\\uXXXX`, `\\n`, `\\\\`).
+ */
+function unescapeRscFragment(raw) {
+  try {
+    return JSON.parse(`"${raw.replace(/\n/g, "\\n")}"`);
+  } catch {
+    return raw.replace(/\\"/g, '"');
+  }
+}
+
+/**
  * Ищет `\"<key>\":{...}` внутри объединённого текста RSC-скриптов и
  * вырезает сбалансированный по фигурным скобкам JSON-объект, затем
- * снимает экранирование кавычек (`\"` -> `"`) и парсит его.
- * Простой, но надёжный способ вытащить конкретный именованный узел
- * пейлоада, не реализуя полностью протокол RSC-стриминга.
+ * разэкранирует и парсит его. Простой, но надёжный способ вытащить
+ * конкретный именованный узел пейлоада, не реализуя полностью протокол
+ * RSC-стриминга.
  */
 function extractEscapedJsonObject(source, key) {
   const marker = `\\"${key}\\":{`;
@@ -114,10 +133,30 @@ function extractEscapedJsonObject(source, key) {
       depth -= 1;
       if (depth === 0) {
         const raw = source.slice(start, i + 1);
-        const unescaped = raw.replace(/\\"/g, '"');
-        return JSON.parse(unescaped);
+        return JSON.parse(unescapeRscFragment(raw));
       }
     }
+  }
+  return null;
+}
+
+/**
+ * `video_review_url` / `youtube_live_url` приходят то голым URL, то целым
+ * HTML-эмбедом `<iframe src="...">`. В БД нужен именно URL — иначе кнопка
+ * «Видеообзор» получит в href кусок разметки.
+ */
+function normalizeVideoUrl(raw) {
+  if (typeof raw !== "string") return null;
+  const trimmed = raw.trim();
+  if (!trimmed || trimmed === "$undefined") return null;
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  const src = trimmed.match(/src\s*=\s*["']([^"']+)["']/i);
+  if (src?.[1]) {
+    const url = src[1];
+    const embed = url.match(/youtube\.com\/embed\/([A-Za-z0-9_-]+)/i);
+    return embed
+      ? `https://www.youtube.com/watch?v=${embed[1]}`
+      : url;
   }
   return null;
 }
@@ -326,8 +365,8 @@ async function scrapeMatch(matchIdOrUrl) {
     referee: detail.referee ?? null,
     // Видеообзор (highlight) и полная трансляция (full match) — то, что
     // нужно для колонок matches.highlight_url / matches.full_match_url.
-    highlightUrl: detail.video_review_url || null,
-    fullMatchUrl: detail.youtube_live_url || null,
+    highlightUrl: normalizeVideoUrl(detail.video_review_url),
+    fullMatchUrl: normalizeVideoUrl(detail.youtube_live_url),
     protocolPdfUrl: detail.protocol_url || null,
     // Владение/удары/угловые и т.д. — null, если сайт не отдал их в HTML
     // для этого матча (см. пояснение в шапке файла).

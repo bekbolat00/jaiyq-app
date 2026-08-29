@@ -7,7 +7,10 @@ export const MATCH_WITH_RELATIONS_SELECT = [
   "*",
   "match_events(*)",
   "match_stats(*)",
-  "match_lineups(player:players(*))",
+  // `*` обязателен: без него не приходят `team_id`/`is_starter` самой заявки,
+  // и матч-центр не может ни разложить игроков по сторонам, ни отличить
+  // стартовый состав от запасных.
+  "match_lineups(*, player:players(*))",
 ].join(", ");
 
 export type MatchFullFetch = {

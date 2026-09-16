@@ -7,10 +7,11 @@ type Props = {
   match: DbMatchRow | null;
   loading: boolean;
   onExpertClick: (row: DbMatchRow) => void;
+  onLiveFinished?: () => void;
 };
 
 /** Один ближайший предстоящий матч — между баннером «Матч тура» и табами главной. */
-export default function NextMatchHero({ match, loading, onExpertClick }: Props) {
+export default function NextMatchHero({ match, loading, onExpertClick, onLiveFinished }: Props) {
   if (loading) {
     return (
       <div className="-mx-4 px-4" aria-busy aria-label="Загрузка ближайшего матча">
@@ -25,7 +26,11 @@ export default function NextMatchHero({ match, loading, onExpertClick }: Props) 
 
   return (
     <div className="-mx-4 px-4">
-      <UpcomingMatchScheduleCard row={match} onExpertClick={() => onExpertClick(match)} />
+      <UpcomingMatchScheduleCard
+        row={match}
+        onExpertClick={() => onExpertClick(match)}
+        onLiveFinished={onLiveFinished}
+      />
     </div>
   );
 }

@@ -89,6 +89,7 @@ export default function HomePageContent() {
         match={heroMatch}
         loading={matchesState.loading}
         onExpertClick={openExpert}
+        onLiveFinished={() => void matchesState.refetch()}
       />
 
       <HomeSectionTabs

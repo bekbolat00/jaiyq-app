@@ -4,6 +4,8 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import BuyTicketModal from "@/app/components/BuyTicketModal";
 import MatchScheduleCountdown from "@/app/components/MatchScheduleCountdown";
+import { LiveGoals, LiveScoreCenter } from "@/app/components/LiveScore";
+import { useLiveMatch } from "@/app/hooks/useLiveMatch";
 import { TEAM_ZHAIYQ } from "@/lib/constants/zhaiyq";
 import type { DbMatchRow } from "@/lib/types";
 import type { Team } from "@/lib/types";
@@ -22,17 +24,21 @@ type Props = {
   row: DbMatchRow;
   index?: number;
   onExpertClick: () => void;
+  /** Вызывается после финального свистка, чтобы перечитать список матчей. */
+  onLiveFinished?: () => void;
 };
 
 export default function UpcomingMatchScheduleCard({
   row,
   index = 0,
   onExpertClick,
+  onLiveFinished,
 }: Props) {
   const opp = opponentTeam(row);
   const left = row.is_home ? TEAM_ZHAIYQ : opp;
   const right = row.is_home ? opp : TEAM_ZHAIYQ;
   const [ticketModalOpen, setTicketModalOpen] = useState(false);
+  const live = useLiveMatch(row, onLiveFinished);
 
   return (
     <motion.article
@@ -55,7 +61,7 @@ export default function UpcomingMatchScheduleCard({
             className="w-10 h-10 sm:w-12 sm:h-12 object-contain shrink-0"
           />
         </div>
-        <MatchScheduleCountdown target={row.match_date} />
+        {live ? <LiveScoreCenter live={live} /> : <MatchScheduleCountdown target={row.match_date} />}
         <div className="flex-1 flex justify-end items-center">
           {/* eslint-disable-next-line @next/next/no-img-element -- local / remote logo URLs */}
           <img
@@ -65,6 +71,8 @@ export default function UpcomingMatchScheduleCard({
           />
         </div>
       </div>
+
+      {live && <LiveGoals live={live} />}
 
       <button
         type="button"

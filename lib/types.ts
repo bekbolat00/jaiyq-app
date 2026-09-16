@@ -248,6 +248,8 @@ export type DbMatchRow = {
   highlight_url?: string | null;
   /** Ссылка на полную трансляцию/повтор матча. */
   full_match_url?: string | null;
+  /** id игры на kffleague.kz — по нему берётся живой счёт. */
+  kff_game_id?: number | null;
 };
 
 /** Контекст матча для шторки «ZHAIYQ ЭКСПЕРТ». */

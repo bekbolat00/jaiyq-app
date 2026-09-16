@@ -1,0 +1,42 @@
+import { NextResponse } from "next/server";
+import { sanitizeInput, type ShotInput } from "@/lib/game/penalty";
+import { MissingTableError, takeShot } from "@/lib/game/penaltyServer";
+import { authenticateTelegramRequest, TelegramAuthError } from "@/lib/telegram/authenticateRequest";
+
+/**
+ * Удар: `POST { initData, input: { aimX, aimY, power, curve } }`.
+ * Клиент присылает только параметры свайпа — гол или сейв решает сервер.
+ */
+export async function POST(request: Request) {
+  let body: Record<string, unknown>;
+  try {
+    body = (await request.json()) as Record<string, unknown>;
+  } catch {
+    return NextResponse.json({ error: "invalid JSON body" }, { status: 400 });
+  }
+  let user;
+  try {
+    user = authenticateTelegramRequest(body.initData);
+  } catch (err) {
+    if (err instanceof TelegramAuthError) return NextResponse.json({ error: err.message }, { status: 401 });
+    throw err;
+  }
+
+  const input = sanitizeInput((body.input ?? {}) as Partial<ShotInput>);
+  if (!input) return NextResponse.json({ error: "invalid shot" }, { status: 400 });
+
+  try {
+    const res = await takeShot(user.id, input);
+    if (!res.ok) {
+      return NextResponse.json(
+        { error: res.reason },
+        { status: res.reason === "no-attempts" ? 429 : 409 },
+      );
+    }
+    return NextResponse.json(res);
+  } catch (err) {
+    if (err instanceof MissingTableError) return NextResponse.json({ error: "not configured" }, { status: 503 });
+    console.error("[api/game/penalty/shoot] failed", err);
+    return NextResponse.json({ error: "shot failed" }, { status: 500 });
+  }
+}

@@ -8,7 +8,7 @@ import { Check, CheckCircle2, ChevronLeft, Loader2, Minus, Plus, X } from "lucid
 import Button from "@/app/components/ui/Button";
 import Crest from "@/app/components/ui/Crest";
 import { PLAYERS } from "@/lib/data/mock";
-import { fetchZhaiyqRosterGroups, type RosterPlayer } from "@/lib/team/fetchTeamRoster";
+import type { ScorerCandidate } from "@/lib/kff/scorers";
 import { displayCase } from "@/lib/text/displayCase";
 import { TEAM_ZHAIYQ } from "@/lib/constants/zhaiyq";
 import { isSupabaseConfigured, supabase } from "@/lib/supabaseClient";
@@ -46,20 +46,29 @@ function getPredictionUserId(): string {
   return "guest";
 }
 
-/** Кто может забить первым: полевые игроки, сначала нападающие. Вратарей и тренеров не показываем. */
-const SCORER_ORDER = ["нп", "пз", "зщ"] as const;
+/** Сколько кандидатов показывать сразу; остальные — по кнопке «Ещё». */
+const SCORERS_VISIBLE = 6;
 
-let rosterCache: RosterPlayer[] | null = null;
+let scorersCache: ScorerCandidate[] | null = null;
 
-async function loadScorerCandidates(): Promise<RosterPlayer[]> {
-  if (rosterCache) return rosterCache;
-  const { groups } = await fetchZhaiyqRosterGroups();
-  const byId = new Map(groups.map((g) => [g.id, g.players]));
-  rosterCache = SCORER_ORDER.flatMap((id) => byId.get(id) ?? []);
-  return rosterCache;
+/** Нападающие, вингеры и атакующие полузащитники Жайыка (роли — по данным KFF). */
+async function loadScorerCandidates(): Promise<ScorerCandidate[]> {
+  if (scorersCache) return scorersCache;
+  const res = await fetch("/api/players/scorers");
+  if (!res.ok) throw new Error(String(res.status));
+  scorersCache = ((await res.json()) as { players: ScorerCandidate[] }).players;
+  return scorersCache;
 }
 
-function playerLabelFromId(id: string | null | undefined, roster: RosterPlayer[] = []): string {
+function plural(n: number, one: string, few: string, many: string) {
+  const m10 = n % 10;
+  const m100 = n % 100;
+  if (m10 === 1 && m100 !== 11) return one;
+  if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return few;
+  return many;
+}
+
+function playerLabelFromId(id: string | null | undefined, roster: ScorerCandidate[] = []): string {
   if (!id) return "—";
   const real = roster.find((x) => x.id === id);
   if (real) return displayCase(real.surname);
@@ -264,14 +273,19 @@ export default function ExpertPredictorSheet({
   const [homeScore, setHomeScore] = useState(0);
   const [awayScore, setAwayScore] = useState(0);
   const [playerId, setPlayerId] = useState<string | null>(null);
-  const [roster, setRoster] = useState<RosterPlayer[]>(rosterCache ?? []);
+  const [roster, setRoster] = useState<ScorerCandidate[]>(scorersCache ?? []);
+  const [showAllScorers, setShowAllScorers] = useState(false);
 
   useEffect(() => {
     if (!open || roster.length) return;
     let cancelled = false;
-    void loadScorerCandidates().then((list) => {
-      if (!cancelled) setRoster(list);
-    });
+    loadScorerCandidates()
+      .then((list) => {
+        if (!cancelled) setRoster(list);
+      })
+      .catch(() => {
+        /* без списка шаг покажет скелетон; повторим при следующем открытии */
+      });
     return () => {
       cancelled = true;
     };
@@ -674,67 +688,88 @@ export default function ExpertPredictorSheet({
                         >
                           <p className="t-body text-center text-muted">Кто забьёт первым за Жайык?</p>
                           {roster.length === 0 ? (
-                            <div className="mt-5 grid grid-cols-3 gap-2" aria-busy>
-                              {Array.from({ length: 6 }).map((_, i) => (
-                                <div key={i} className="aspect-[3/4] animate-pulse rounded-xl bg-surface-2" />
+                            <div className="mt-5 grid grid-cols-2 gap-3" aria-busy>
+                              {Array.from({ length: 4 }).map((_, i) => (
+                                <div key={i} className="aspect-[5/4] animate-pulse rounded-2xl bg-surface-2" />
                               ))}
                             </div>
                           ) : (
-                            <div
-                              className="mt-5 grid max-h-[46dvh] grid-cols-3 gap-2 overflow-y-auto overscroll-contain pb-1"
-                              role="radiogroup"
-                              aria-label="Кто забьёт первым"
-                            >
-                              {roster.map((p) => {
-                                const sel = playerId === p.id;
-                                return (
-                                  <motion.button
-                                    key={p.id}
-                                    type="button"
-                                    role="radio"
-                                    aria-checked={sel}
-                                    onClick={() => {
-                                      if (!sel) haptic.select();
-                                      setPlayerId(p.id);
-                                    }}
-                                    whileTap={{ scale: 0.97 }}
-                                    transition={{ duration: 0.12, ease: "easeOut" }}
-                                    className={`relative flex flex-col overflow-hidden rounded-xl bg-surface-2 text-left ring-inset transition-shadow duration-150 ${
-                                      sel ? "ring-2 ring-accent" : "ring-1 ring-line"
-                                    }`}
-                                  >
-                                    <div className="relative aspect-square w-full bg-gradient-to-b from-navy/50 to-transparent">
-                                      {p.photoUrl ? (
-                                        // eslint-disable-next-line @next/next/no-img-element -- вырезки игроков с kffleague.kz
-                                        <img
-                                          src={p.photoUrl}
-                                          alt=""
-                                          loading="lazy"
-                                          className="absolute inset-x-0 bottom-0 mx-auto h-full w-auto object-contain object-bottom"
-                                        />
-                                      ) : (
-                                        <span className="absolute inset-0 flex items-center justify-center text-[22px] font-semibold text-accent/70">
-                                          {`${p.surname.charAt(0)}${p.firstName.charAt(0)}`.toUpperCase()}
+                            <>
+                              <div
+                                className="mt-4 grid max-h-[54dvh] grid-cols-2 gap-2.5 overflow-y-auto overscroll-contain pb-1"
+                                role="radiogroup"
+                                aria-label="Кто забьёт первым"
+                              >
+                                {(showAllScorers ? roster : roster.slice(0, SCORERS_VISIBLE)).map((p) => {
+                                  const sel = playerId === p.id;
+                                  return (
+                                    <motion.button
+                                      key={p.id}
+                                      type="button"
+                                      role="radio"
+                                      aria-checked={sel}
+                                      onClick={() => {
+                                        if (!sel) haptic.select();
+                                        setPlayerId(p.id);
+                                      }}
+                                      whileTap={{ scale: 0.97 }}
+                                      transition={{ duration: 0.12, ease: "easeOut" }}
+                                      className={`relative flex flex-col overflow-hidden rounded-2xl bg-surface-2 text-left ring-inset transition-shadow duration-150 ${
+                                        sel ? "ring-2 ring-accent" : "ring-1 ring-line"
+                                      }`}
+                                    >
+                                      <div className="relative aspect-[5/4] w-full overflow-hidden bg-gradient-to-b from-navy/70 via-navy/30 to-surface-2">
+                                        {p.photoUrl ? (
+                                          // eslint-disable-next-line @next/next/no-img-element -- вырезки игроков с kffleague.kz
+                                          <img
+                                            src={p.photoUrl}
+                                            alt=""
+                                            loading="lazy"
+                                            className="absolute inset-x-0 bottom-0 mx-auto h-[96%] w-auto max-w-none object-contain object-bottom"
+                                          />
+                                        ) : (
+                                          <span className="absolute inset-0 flex items-center justify-center text-[28px] font-semibold text-accent/60">
+                                            {`${p.surname.charAt(0)}${p.firstName.charAt(0)}`.toUpperCase()}
+                                          </span>
+                                        )}
+                                        <span className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-surface-2 to-transparent" aria-hidden />
+                                        {p.number !== "—" && (
+                                          <span className="t-small absolute left-2.5 top-2 font-semibold tabular-nums text-foreground/90">{p.number}</span>
+                                        )}
+                                        {sel && (
+                                          <span className="absolute right-2.5 top-2.5 flex h-6 w-6 items-center justify-center rounded-full bg-accent text-on-accent">
+                                            <Check className="h-4 w-4" strokeWidth={2.5} aria-hidden />
+                                          </span>
+                                        )}
+                                        {p.goals > 0 && (
+                                          <span className="t-caption absolute bottom-2 right-2.5 rounded-md bg-background/70 px-1.5 py-0.5 tabular-nums text-foreground">
+                                            {p.goals} {plural(p.goals, "гол", "гола", "голов")}
+                                          </span>
+                                        )}
+                                      </div>
+                                      <span className="px-3 pb-2.5 pt-1">
+                                        <span className="t-body block truncate font-medium text-foreground">{p.surname}</span>
+                                        <span className="t-caption block truncate text-muted">
+                                          {p.role === "Атакующий полузащитник" ? "Полузащитник" : p.role}
                                         </span>
-                                      )}
-                                      {p.number !== "—" && (
-                                        <span className="t-caption absolute left-1.5 top-1.5 rounded-md bg-background/70 px-1.5 tabular-nums text-foreground">
-                                          {p.number}
-                                        </span>
-                                      )}
-                                      {sel && (
-                                        <span className="absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-accent text-on-accent">
-                                          <Check className="h-3.5 w-3.5" strokeWidth={2.5} aria-hidden />
-                                        </span>
-                                      )}
-                                    </div>
-                                    <span className="t-caption line-clamp-1 px-2 py-2 font-medium text-foreground">
-                                      {displayCase(p.surname)}
-                                    </span>
-                                  </motion.button>
-                                );
-                              })}
-                            </div>
+                                      </span>
+                                    </motion.button>
+                                  );
+                                })}
+                              </div>
+                              {!showAllScorers && roster.length > SCORERS_VISIBLE && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    haptic.select();
+                                    setShowAllScorers(true);
+                                  }}
+                                  className="t-small mx-auto mt-3 h-9 rounded-lg px-3 font-medium text-accent active:bg-accent/[0.08]"
+                                >
+                                  Ещё {roster.length - SCORERS_VISIBLE} {plural(roster.length - SCORERS_VISIBLE, "игрок", "игрока", "игроков")}
+                                </button>
+                              )}
+                            </>
                           )}
                         </motion.div>
                       )}

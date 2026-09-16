@@ -25,6 +25,8 @@ export type LiveTimelineEvent = {
   playerOutName?: string;
   /** Гол с пенальти. */
   isPenalty?: boolean;
+  /** Автогол: `playerName` — игрок соперника, забивший в свои ворота. */
+  isOwnGoal?: boolean;
   /** Счёт сразу после этого гола. */
   scoreAfter?: { home: number; away: number };
   videoUrl?: string | null;

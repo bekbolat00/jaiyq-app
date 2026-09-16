@@ -3,13 +3,15 @@
 import { useCallback, useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { QRCodeSVG } from "qrcode.react";
+import { CircleCheck, Clock, Ticket } from "lucide-react";
+import EmptyState from "@/app/components/ui/EmptyState";
 import { getTelegramInitData } from "@/lib/telegram/getInitData";
 import type { MyTicket } from "@/lib/types";
 
 function formatDate(iso: string) {
   if (!iso) return "";
   return new Date(iso).toLocaleDateString("ru-RU", {
-    day: "2-digit",
+    day: "numeric",
     month: "long",
     year: "numeric",
   });
@@ -18,7 +20,7 @@ function formatDate(iso: string) {
 function formatDateTime(iso: string) {
   if (!iso) return "";
   return new Date(iso).toLocaleString("ru-RU", {
-    day: "2-digit",
+    day: "numeric",
     month: "long",
     hour: "2-digit",
     minute: "2-digit",
@@ -29,94 +31,92 @@ function matchTitle(t: MyTicket) {
   return t.isHome ? `Жайык — ${t.opponent}` : `${t.opponent} — Жайык`;
 }
 
+const STATUS: Record<MyTicket["status"], { label: string; cls: string }> = {
+  paid: { label: "Оплачен", cls: "bg-accent/12 text-accent" },
+  pending: { label: "Ждёт оплаты", cls: "bg-draw/12 text-draw" },
+  used: { label: "Использован", cls: "bg-surface-2 text-subtle" },
+};
+
 function StatusBadge({ status }: { status: MyTicket["status"] }) {
-  const map = {
-    paid: { label: "Оплачен", cls: "neon-cyan border-accent/45 bg-accent/10 text-accent" },
-    pending: { label: "Ждёт оплаты", cls: "border-orange-400/40 bg-orange-400/10 text-orange-300" },
-    used: { label: "Использован", cls: "border-white/10 bg-white/5 text-muted" },
-  } as const;
-  const s = map[status];
+  const s = STATUS[status];
   return (
-    <span className={`rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-widest ${s.cls}`}>
-      {s.label}
-    </span>
+    <span className={`t-caption shrink-0 rounded-lg px-2 py-1 ${s.cls}`}>{s.label}</span>
   );
 }
 
-function TicketCard({ ticket }: { ticket: MyTicket }) {
+/** Линия отрыва билета: пунктир и два полукруглых выреза цвета фона. */
+function Perforation() {
+  return (
+    <div className="relative h-0" aria-hidden>
+      <span className="absolute left-0 top-0 h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full border border-line bg-background" />
+      <span className="absolute right-0 top-0 h-5 w-5 translate-x-1/2 -translate-y-1/2 rounded-full border border-line bg-background" />
+      <div className="mx-5 border-t border-dashed border-line-strong" />
+    </div>
+  );
+}
+
+function TicketCard({ ticket, index }: { ticket: MyTicket; index: number }) {
   const isUsed = ticket.status === "used";
 
   return (
     <motion.article
-      layout
-      initial={{ opacity: 0, y: 14 }}
+      initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
-      className={`glass-premium relative w-full overflow-hidden rounded-3xl shadow-[0_30px_80px_-30px_rgba(0,240,255,0.25),0_20px_60px_-30px_rgba(0,0,0,0.95)] ${
-        isUsed ? "grayscale" : ""
-      }`}
+      transition={{ duration: 0.22, ease: [0.2, 0.8, 0.2, 1], delay: Math.min(index, 5) * 0.04 }}
+      className="relative overflow-hidden rounded-2xl border border-line"
     >
-      <span aria-hidden className="absolute left-0 top-1/2 z-20 h-7 w-7 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#020408]" />
-      <span aria-hidden className="absolute right-0 top-1/2 z-20 h-7 w-7 translate-x-1/2 -translate-y-1/2 rounded-full bg-[#020408]" />
-
-      <header className="flex items-center justify-between px-5 pt-5">
-        <div className="flex items-center gap-2">
-          <span className="inline-block h-2 w-2 rounded-full bg-accent shadow-[0_0_10px_rgba(0,240,255,0.9)]" />
-          <span className="neon-cyan text-[11px] font-bold uppercase tracking-[0.22em] text-accent">
-            ФК Жайык
-          </span>
+      <header className={`px-4 pb-5 pt-4 ${isUsed ? "bg-surface" : "bg-navy"}`}>
+        <div className="flex items-start justify-between gap-3">
+          <p className="t-caption text-muted">{ticket.competition || "ФК Жайык"}</p>
+          <StatusBadge status={ticket.status} />
         </div>
-        <StatusBadge status={ticket.status} />
-      </header>
-
-      <div className="px-5 pb-5 pt-4">
-        <p className="text-[11px] uppercase tracking-widest text-muted">Матч</p>
-        <h3 className="mt-1 text-[20px] font-bold leading-tight text-foreground">
+        <h3 className={`t-h3 mt-2 ${isUsed ? "text-muted" : "text-foreground"}`}>
           {matchTitle(ticket)}
         </h3>
-        <p className="mt-2 text-[15px] font-bold leading-none text-foreground/90">
-          {formatDate(ticket.matchDate)}
-        </p>
-      </div>
+        <p className="t-small mt-1 text-muted">{formatDate(ticket.matchDate)}</p>
+      </header>
 
-      <div className="relative h-px">
-        <div className="mx-6 h-px border-t border-dashed border-white/15" />
-      </div>
+      <Perforation />
 
-      {isUsed ? (
-        <div className="flex flex-col items-center gap-2 px-5 py-8">
-          <div className="flex h-[168px] w-[168px] flex-col items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04]">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="h-10 w-10 text-white/35" aria-hidden>
-              <rect x="4" y="10.5" width="16" height="10" rx="2" />
-              <path d="M8 10.5V7a4 4 0 1 1 8 0v3.5" />
-            </svg>
-            <p className="text-[13px] font-black uppercase tracking-wide text-white/60">
-              Билет использован
-            </p>
+      <div className="bg-surface px-4 pb-5 pt-6">
+        {isUsed ? (
+          <div className="flex items-center gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-surface-2 text-subtle">
+              <CircleCheck className="h-5 w-5" strokeWidth={1.75} aria-hidden />
+            </span>
+            <div className="min-w-0">
+              <p className="t-body text-foreground">Билет использован</p>
+              {ticket.scannedAt ? (
+                <p className="t-caption text-muted">Вход: {formatDateTime(ticket.scannedAt)}</p>
+              ) : null}
+            </div>
           </div>
-          {ticket.scannedAt ? (
-            <p className="text-center text-[11px] font-medium text-muted">
-              Вход: {formatDateTime(ticket.scannedAt)}
-            </p>
-          ) : null}
-        </div>
-      ) : ticket.status === "paid" && ticket.qrHash ? (
-        <div className="flex flex-col items-center gap-2 px-5 py-6">
-          <div className="rounded-2xl bg-white p-3 shadow-[0_0_0_1px_rgba(0,240,255,0.45),0_0_32px_-2px_rgba(0,240,255,0.55)]">
-            <QRCodeSVG value={ticket.qrHash} size={168} level="M" marginSize={0} />
+        ) : ticket.status === "paid" && ticket.qrHash ? (
+          <div className="flex flex-col items-center gap-3">
+            <div className="rounded-xl bg-white p-3">
+              <QRCodeSVG
+                value={ticket.qrHash}
+                size={184}
+                level="M"
+                marginSize={0}
+              />
+            </div>
+            <p className="t-caption text-center text-muted">Покажите QR-код на входе</p>
           </div>
-          <p className="text-center text-[10px] uppercase tracking-widest text-muted">
-            Покажите на входе
-          </p>
-        </div>
-      ) : (
-        <div className="flex flex-col items-center gap-2 px-5 py-8 text-center">
-          <p className="text-[13px] font-bold text-orange-300">Ожидает оплаты</p>
-          <p className="max-w-[240px] text-[11px] leading-relaxed text-muted">
-            Завершите оплату в Kaspi и нажмите «Я оплатил» — после этого появится QR-код.
-          </p>
-        </div>
-      )}
+        ) : (
+          <div className="flex items-start gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-draw/12 text-draw">
+              <Clock className="h-5 w-5" strokeWidth={1.75} aria-hidden />
+            </span>
+            <div className="min-w-0">
+              <p className="t-body text-foreground">Ожидает оплаты</p>
+              <p className="t-small mt-0.5 text-muted">
+                Завершите оплату в Kaspi и нажмите «Я оплатил» — после этого появится QR-код.
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
     </motion.article>
   );
 }
@@ -171,32 +171,42 @@ export default function MyTicketsSection() {
 
   if (tickets === null) {
     return (
-      <div className="glass-premium rounded-2xl p-6 text-center text-[13px] text-muted">
-        Загружаем билеты…
+      <div className="overflow-hidden rounded-2xl border border-line" aria-busy="true">
+        <span className="sr-only">Загружаем билеты…</span>
+        <div className="h-[104px] bg-surface-2" />
+        <div className="h-[72px] bg-surface" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="glass-premium rounded-2xl p-6 text-center text-[13px] text-muted">
-        {error}
+      <div className="card">
+        <EmptyState
+          icon={<Ticket className="h-6 w-6" strokeWidth={1.75} aria-hidden />}
+          title="Билеты недоступны"
+          description={error}
+        />
       </div>
     );
   }
 
   if (!tickets.length) {
     return (
-      <div className="glass-premium rounded-2xl p-6 text-center text-[13px] text-muted">
-        Билетов пока нет.
+      <div className="card">
+        <EmptyState
+          icon={<Ticket className="h-6 w-6" strokeWidth={1.75} aria-hidden />}
+          title="Билетов пока нет"
+          description="Купленные билеты появятся здесь вместе с QR-кодом для входа."
+        />
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      {tickets.map((t) => (
-        <TicketCard key={t.id} ticket={t} />
+    <div className="flex flex-col gap-3">
+      {tickets.map((t, i) => (
+        <TicketCard key={t.id} ticket={t} index={i} />
       ))}
     </div>
   );

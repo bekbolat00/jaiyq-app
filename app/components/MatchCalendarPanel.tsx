@@ -77,7 +77,7 @@ function MatchRow({
             href={href}
             target="_blank"
             rel="noopener noreferrer"
-            className="neon-cyan-surface flex w-full items-center justify-center rounded-2xl bg-gradient-to-r from-[#00f0ff] via-[#00d4ff] to-[#00a8e8] py-3.5 text-center text-[13px] font-black uppercase tracking-[0.12em] text-[#031014] shadow-[0_0_28px_rgba(0,240,255,0.55),0_0_48px_rgba(0,240,255,0.2)] transition-[transform,filter] active:scale-[0.98] active:brightness-95"
+            className="neon-cyan-surface flex w-full items-center justify-center rounded-2xl bg-gradient-to-r from-[#00E8F0] via-[#00d4ff] to-[#00a8e8] py-3.5 text-center text-[13px] font-black uppercase tracking-[0.12em] text-[#031014] shadow-[0_0_28px_rgba(0,240,255,0.55),0_0_48px_rgba(0,240,255,0.2)] transition-[transform,filter] active:scale-[0.98] active:brightness-95"
           >
             Купить билет
           </a>

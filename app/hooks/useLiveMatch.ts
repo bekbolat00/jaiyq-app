@@ -1,5 +1,6 @@
 "use client";
 
+import { haptic } from "@/lib/telegram/webApp";
 import { useEffect, useRef, useState } from "react";
 import type { LiveGameState } from "@/lib/kff/liveGame";
 import type { DbMatchRow } from "@/lib/types";
@@ -11,6 +12,10 @@ const WINDOW_BEFORE_MS = 10 * 60_000;
 const WINDOW_AFTER_MS = 3.5 * 60 * 60_000;
 /** Сервер подтягивает итог матча в фоне — даём ему время, прежде чем перечитать список. */
 const REFETCH_AFTER_FINISH_MS = 25_000;
+
+function zhaiyqGoals(state: LiveGameState, zhaiyqIsHome: boolean): number {
+  return (zhaiyqIsHome ? state.homeScore : state.awayScore) ?? 0;
+}
 
 function inLiveWindow(row: DbMatchRow, now: number): boolean {
   const kickoff = new Date(row.match_date).getTime();
@@ -25,6 +30,7 @@ function inLiveWindow(row: DbMatchRow, now: number): boolean {
 export function useLiveMatch(row: DbMatchRow, onFinished?: () => void): LiveGameState | null {
   const [state, setState] = useState<LiveGameState | null>(null);
   const onFinishedRef = useRef(onFinished);
+  const prevGoalsRef = useRef<number | null>(null);
 
   useEffect(() => {
     onFinishedRef.current = onFinished;
@@ -55,6 +61,12 @@ export function useLiveMatch(row: DbMatchRow, onFinished?: () => void): LiveGame
         if (res.ok) {
           const next = (await res.json()) as LiveGameState;
           if (cancelled) return;
+          // Гол Жайыка — короткая вибрация. Сравниваем с прошлым ответом, чтобы
+          // не вибрировать при первом открытии уже идущего матча.
+          if (prevGoalsRef.current != null && zhaiyqGoals(next, row.is_home) > prevGoalsRef.current) {
+            haptic.notify("success");
+          }
+          prevGoalsRef.current = zhaiyqGoals(next, row.is_home);
           setState(next.phase === "upcoming" ? null : next);
           if (next.phase === "finished") {
             finishTimer ??= setTimeout(() => onFinishedRef.current?.(), REFETCH_AFTER_FINISH_MS);

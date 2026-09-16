@@ -18,8 +18,8 @@ const STAT_ROWS: { key: StatKey; label: string; format: "percent" | "int" }[] = 
   { key: "shots", label: "Удары", format: "int" },
   { key: "shotsOnTarget", label: "Удары в створ", format: "int" },
   { key: "corners", label: "Угловые", format: "int" },
-  { key: "yellowCards", label: "ЖК", format: "int" },
-  { key: "saves", label: "Сэйвы", format: "int" },
+  { key: "yellowCards", label: "Жёлтые карточки", format: "int" },
+  { key: "saves", label: "Сейвы", format: "int" },
 ];
 
 type Props = {
@@ -35,79 +35,59 @@ function formatValue(value: number, format: "percent" | "int"): string {
   return String(Math.round(value));
 }
 
-export default function MatchDetailStatsPanel({
-  stats,
-  homeName,
-  awayName,
-}: Props) {
+/** Сравнение команд по матчу — одна карточка, строки через разделитель. */
+export default function MatchDetailStatsPanel({ stats, homeName, awayName }: Props) {
   return (
-    <div className="relative">
-      <div className="pointer-events-none absolute -inset-2 rounded-2xl bg-[radial-gradient(ellipse_at_50%_0%,rgba(0,240,255,0.06),transparent_60%)]" />
-      <div className="relative space-y-6">
-        <p className="text-center text-[8px] font-black uppercase tracking-[0.22em] text-white/40">
-          Сравнение по матчу
-        </p>
+    <div className="card overflow-hidden">
+      <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
+        <span className="t-caption flex min-w-0 items-center gap-2 text-muted">
+          <span className="h-2 w-2 shrink-0 rounded-full bg-accent" aria-hidden />
+          <span className="truncate">{homeName}</span>
+        </span>
+        <span className="t-caption flex min-w-0 items-center gap-2 text-muted">
+          <span className="truncate">{awayName}</span>
+          <span className="h-2 w-2 shrink-0 rounded-full bg-muted/40" aria-hidden />
+        </span>
+      </div>
 
-        <div className="flex items-end justify-between gap-3 px-0.5">
-          <span className="min-w-0 truncate text-left text-[10px] font-bold uppercase tracking-wide text-white/50">
-            {homeName}
-          </span>
-          <span className="min-w-0 truncate text-right text-[10px] font-bold uppercase tracking-wide text-cyan-400/80">
-            {awayName}
-          </span>
-        </div>
-
+      <ul className="divide-y divide-line">
         {STAT_ROWS.map((row, index) => {
-          const pair = stats[row.key];
-          const home = pair.home;
-          const away = pair.away;
-          const total = home + away || 1;
-          const homeShare = (home / total) * 100;
-          const awayShare = (away / total) * 100;
+          const { home, away } = stats[row.key];
+          const total = home + away;
+          const homeShare = total > 0 ? (home / total) * 100 : 0;
+          const awayShare = total > 0 ? (away / total) * 100 : 0;
 
           return (
-            <div key={row.key} className="space-y-2">
-              <p className="text-center text-sm text-white/70">{row.label}</p>
-
-              <div className="flex items-center justify-between gap-3">
-                <span className="shrink-0 text-lg font-bold tabular-nums text-white">
-                  {formatValue(home, row.format)}
-                </span>
-                <span className="shrink-0 text-lg font-bold tabular-nums text-cyan-400">
+            <li key={row.key} className="px-4 py-3.5">
+              <div className="grid grid-cols-[56px_1fr_56px] items-center gap-2">
+                <span className="t-h3 tabular-nums text-foreground">{formatValue(home, row.format)}</span>
+                <span className="t-small text-center text-muted">{row.label}</span>
+                <span className="t-h3 text-right tabular-nums text-foreground">
                   {formatValue(away, row.format)}
                 </span>
               </div>
-
-              <div className="flex h-2 w-full overflow-hidden rounded-full bg-black/35 ring-1 ring-inset ring-white/[0.06]">
-                <div className="relative flex h-full w-1/2 justify-end overflow-hidden rounded-l-full">
+              <div className="mt-2.5 flex h-1 w-full gap-1">
+                <div className="flex h-full flex-1 justify-end overflow-hidden rounded-full bg-surface-2">
                   <motion.div
-                    className="h-full max-w-full rounded-l-full bg-gradient-to-l from-orange-500/95 via-rose-500/55 to-transparent"
+                    className="h-full rounded-full bg-accent"
                     initial={{ width: 0 }}
                     animate={{ width: `${homeShare}%` }}
-                    transition={{
-                      duration: 0.75,
-                      ease: [0.22, 1, 0.36, 1],
-                      delay: 0.06 + index * 0.07,
-                    }}
+                    transition={{ duration: 0.5, ease: [0.2, 0.8, 0.2, 1], delay: index * 0.04 }}
                   />
                 </div>
-                <div className="relative flex h-full w-1/2 justify-start overflow-hidden rounded-r-full">
+                <div className="flex h-full flex-1 justify-start overflow-hidden rounded-full bg-surface-2">
                   <motion.div
-                    className="h-full max-w-full rounded-r-full bg-gradient-to-r from-cyan-400/95 via-cyan-500/50 to-transparent"
+                    className="h-full rounded-full bg-muted/40"
                     initial={{ width: 0 }}
                     animate={{ width: `${awayShare}%` }}
-                    transition={{
-                      duration: 0.75,
-                      ease: [0.22, 1, 0.36, 1],
-                      delay: 0.1 + index * 0.07,
-                    }}
+                    transition={{ duration: 0.5, ease: [0.2, 0.8, 0.2, 1], delay: index * 0.04 }}
                   />
                 </div>
               </div>
-            </div>
+            </li>
           );
         })}
-      </div>
+      </ul>
     </div>
   );
 }

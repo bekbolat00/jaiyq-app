@@ -1,7 +1,10 @@
 "use client";
 
+import { useTelegramBackButton } from "@/app/hooks/useTelegramBackButton";
 import { useEffect, type ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { Camera, ChevronRight, FolderOpen, Images } from "lucide-react";
+import { haptic } from "@/lib/telegram/webApp";
 
 export type AvatarPickSource = "gallery" | "camera" | "file";
 
@@ -14,7 +17,7 @@ type Props = {
 
 const backdropVariants = {
   hidden: { opacity: 0 },
-  visible: { opacity: 1, transition: { duration: 0.2 } },
+  visible: { opacity: 1, transition: { duration: 0.22 } },
   exit: { opacity: 0, transition: { duration: 0.18 } },
 };
 
@@ -22,35 +25,40 @@ const sheetVariants = {
   hidden: { y: "100%" },
   visible: {
     y: 0,
-    transition: { type: "spring" as const, stiffness: 420, damping: 40 },
+    transition: { type: "spring" as const, stiffness: 380, damping: 36 },
   },
-  exit: { y: "100%", transition: { duration: 0.28, ease: [0.4, 0, 0.2, 1] as const } },
+  exit: { y: "100%", transition: { duration: 0.24, ease: [0.4, 0, 0.2, 1] as const } },
 };
 
 function RowButton({
   label,
   onClick,
-  children,
+  icon,
 }: {
   label: string;
   onClick?: () => void;
-  children: ReactNode;
+  icon: ReactNode;
 }) {
   return (
     <button
       type="button"
-      onClick={onClick}
-      className="flex w-full items-center gap-3 px-4 py-4 text-left text-[15px] font-semibold text-foreground transition-colors hover:bg-white/[0.04]"
+      onClick={() => {
+        haptic.impact("light");
+        onClick?.();
+      }}
+      className="flex min-h-14 w-full items-center gap-3 px-4 py-2 text-left transition-colors active:bg-surface-2"
     >
-      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-accent">
-        {children}
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-2 text-foreground">
+        {icon}
       </span>
-      {label}
+      <span className="t-body min-w-0 flex-1 text-foreground">{label}</span>
+      <ChevronRight className="h-5 w-5 text-subtle" strokeWidth={1.75} aria-hidden />
     </button>
   );
 }
 
 export default function AvatarUploadSheet({ open, onClose, onPickSource }: Props) {
+  useTelegramBackButton(open, onClose);
   useEffect(() => {
     if (!open) return;
     const original = document.body.style.overflow;
@@ -65,21 +73,23 @@ export default function AvatarUploadSheet({ open, onClose, onPickSource }: Props
     };
   }, [open, onClose]);
 
+  const iconCls = "h-5 w-5";
+
   return (
     <AnimatePresence>
       {open && (
         <motion.div
           className="fixed inset-0 z-[70] flex flex-col justify-end"
-          initial={{ opacity: 0 }}
+          initial={{ opacity: 1 }}
           animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
+          exit={{ opacity: 1 }}
           role="dialog"
           aria-modal
           aria-labelledby="avatar-upload-title"
         >
           <motion.button
             type="button"
-            className="absolute inset-0 bg-[#020408]/72 backdrop-blur-sm"
+            className="absolute inset-0 bg-background/70"
             aria-label="Закрыть"
             onClick={onClose}
             variants={backdropVariants}
@@ -88,82 +98,41 @@ export default function AvatarUploadSheet({ open, onClose, onPickSource }: Props
             exit="exit"
           />
           <motion.aside
-            className="glass-premium relative z-10 w-full overflow-hidden rounded-t-3xl border border-white/10 border-b-0 bg-[#020408]/95 shadow-[0_-12px_48px_rgba(0,0,0,0.55)]"
+            className="relative z-10 mx-auto w-full max-w-lg rounded-t-3xl border-t border-line bg-surface"
             variants={sheetVariants}
             initial="hidden"
             animate="visible"
             exit="exit"
             onClick={(e) => e.stopPropagation()}
           >
-            <div
-              className="mx-auto mt-3 h-1 w-10 rounded-full bg-white/15"
-              aria-hidden
-            />
-            <h2 id="avatar-upload-title" className="sr-only">
-              Загрузка фото профиля
-            </h2>
-            <nav
-              className="mt-2 divide-y divide-white/10 px-1 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2"
-              aria-label="Источник фото"
-            >
-              <RowButton
-                label="Медиатека"
-                onClick={() => onPickSource("gallery")}
+            <div className="mx-auto mt-2 h-1 w-9 rounded-full bg-line-strong" aria-hidden />
+            <div className="px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4">
+              <h2 id="avatar-upload-title" className="t-h2 text-foreground">
+                Фото профиля
+              </h2>
+              <p className="t-small mt-1 text-muted">JPG или PNG, до 5 МБ</p>
+
+              <nav
+                className="mt-4 divide-y divide-line overflow-hidden rounded-2xl bg-surface-2/50"
+                aria-label="Источник фото"
               >
-                <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" aria-hidden>
-                  <rect
-                    x="3"
-                    y="5"
-                    width="18"
-                    height="14"
-                    rx="2"
-                    stroke="currentColor"
-                    strokeWidth="1.6"
-                  />
-                  <circle cx="8.5" cy="10" r="1.5" fill="currentColor" />
-                  <path
-                    d="M21 15l-5-5-4 4-3-3-6 6"
-                    stroke="currentColor"
-                    strokeWidth="1.6"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </RowButton>
-              <RowButton
-                label="Сделать снимок"
-                onClick={() => onPickSource("camera")}
-              >
-                <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" aria-hidden>
-                  <path
-                    d="M4 9h3l1.5-2h7L17 9h3a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2v-8a2 2 0 012-2z"
-                    stroke="currentColor"
-                    strokeWidth="1.6"
-                    strokeLinejoin="round"
-                  />
-                  <circle cx="12" cy="14" r="3.2" stroke="currentColor" strokeWidth="1.6" />
-                </svg>
-              </RowButton>
-              <RowButton
-                label="Выбрать файл"
-                onClick={() => onPickSource("file")}
-              >
-                <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" aria-hidden>
-                  <path
-                    d="M4 7a2 2 0 012-2h5l2 2h5a2 2 0 012 2v10a2 2 0 01-2 2H6a2 2 0 01-2-2V7z"
-                    stroke="currentColor"
-                    strokeWidth="1.6"
-                    strokeLinejoin="round"
-                  />
-                  <path
-                    d="M4 12h16"
-                    stroke="currentColor"
-                    strokeWidth="1.6"
-                    strokeLinecap="round"
-                  />
-                </svg>
-              </RowButton>
-            </nav>
+                <RowButton
+                  label="Медиатека"
+                  onClick={() => onPickSource("gallery")}
+                  icon={<Images className={iconCls} strokeWidth={1.75} aria-hidden />}
+                />
+                <RowButton
+                  label="Сделать снимок"
+                  onClick={() => onPickSource("camera")}
+                  icon={<Camera className={iconCls} strokeWidth={1.75} aria-hidden />}
+                />
+                <RowButton
+                  label="Выбрать файл"
+                  onClick={() => onPickSource("file")}
+                  icon={<FolderOpen className={iconCls} strokeWidth={1.75} aria-hidden />}
+                />
+              </nav>
+            </div>
           </motion.aside>
         </motion.div>
       )}

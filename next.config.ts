@@ -17,6 +17,8 @@ const unsplashPattern = {
 };
 
 const nextConfig: NextConfig = {
+  // Только для `next dev`: открыть локальный сервер с телефона в той же сети.
+  allowedDevOrigins: ["172.20.10.7", "192.168.*.*"],
   images: {
     remotePatterns: [
       unsplashPattern,

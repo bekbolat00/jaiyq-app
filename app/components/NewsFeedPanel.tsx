@@ -1,53 +1,35 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { Heart, Share2 } from "lucide-react";
 import Image from "next/image";
 import { useCallback, useState } from "react";
+import SectionHeader from "@/app/components/ui/SectionHeader";
 import { NEWS_FEED } from "@/lib/data/mock";
+import { haptic } from "@/lib/telegram/webApp";
 import type { NewsFeedItem } from "@/lib/types";
 
-function HeartIcon({ filled }: { filled: boolean }) {
+/** Фото новости с запасным вариантом: при ошибке загрузки — герб на фирменном синем. */
+function NewsImage({ src, className, sizes }: { src: string; className: string; sizes: string }) {
+  const [broken, setBroken] = useState(false);
   return (
-    <svg
-      viewBox="0 0 24 24"
-      className="h-5 w-5"
-      fill={filled ? "currentColor" : "none"}
-      stroke="currentColor"
-      strokeWidth={filled ? 0 : 2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
-    </svg>
+    <div className={`relative overflow-hidden bg-navy/60 ${className}`}>
+      {broken ? (
+        // eslint-disable-next-line @next/next/no-img-element -- локальный герб как заглушка
+        <img src="/teams/zhaiyq.png" alt="" className="absolute left-1/2 top-1/2 h-1/2 w-1/2 -translate-x-1/2 -translate-y-1/2 object-contain opacity-40" />
+      ) : (
+        <Image src={src} alt="" fill className="object-cover" sizes={sizes} onError={() => setBroken(true)} />
+      )}
+    </div>
   );
 }
 
-function ShareIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      className="h-5 w-5"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <circle cx="18" cy="5" r="3" />
-      <circle cx="6" cy="12" r="3" />
-      <circle cx="18" cy="19" r="3" />
-      <path d="m8.59 13.51 6.83 3.98M15.41 6.51l-6.82 3.98" />
-    </svg>
-  );
-}
-
-function NewsCard({ item, index }: { item: NewsFeedItem; index: number }) {
+function useNewsActions(item: NewsFeedItem) {
   const [liked, setLiked] = useState(item.isLiked);
   const [likes, setLikes] = useState(item.likesCount);
 
   const toggleLike = useCallback(() => {
+    haptic.impact("light");
     setLiked((prev) => {
       setLikes((c) => (prev ? c - 1 : c + 1));
       return !prev;
@@ -57,88 +39,80 @@ function NewsCard({ item, index }: { item: NewsFeedItem; index: number }) {
   const share = useCallback(async () => {
     const payload = { title: item.title, text: item.description, url: window.location.href };
     try {
-      if (navigator.share) {
-        await navigator.share(payload);
-      } else if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(window.location.href);
-      }
+      if (navigator.share) await navigator.share(payload);
+      else if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(window.location.href);
     } catch {
-      /* user cancelled or unsupported */
+      /* пользователь отменил или не поддерживается */
     }
   }, [item.description, item.title]);
 
+  return { liked, likes, toggleLike, share };
+}
+
+function NewsMeta({ item }: { item: NewsFeedItem }) {
+  const { liked, likes, toggleLike, share } = useNewsActions(item);
   return (
-    <motion.article
-      layout
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{
-        duration: 0.42,
-        ease: [0.22, 1, 0.36, 1],
-        delay: index * 0.06,
-      }}
-      className="glass-premium overflow-hidden rounded-2xl shadow-[0_0_32px_rgba(0,240,255,0.06)]"
-    >
-      <div className="relative aspect-video w-full overflow-hidden rounded-t-2xl">
-        <Image
-          src={item.imageUrl}
-          alt=""
-          fill
-          className="object-cover"
-          sizes="(max-width: 768px) 100vw, 480px"
-        />
-      </div>
-      <div className="rounded-b-2xl border border-t-0 border-white/10 bg-white/5 p-4 backdrop-blur-xl">
-        <h3 className="mb-2 text-lg font-bold text-foreground">{item.title}</h3>
-        <p className="line-clamp-2 text-sm text-muted">{item.description}</p>
-        <p className="mt-2 text-[11px] font-semibold uppercase tracking-wider text-muted/90">
-          {item.date}
-        </p>
+    <div className="mt-2 flex items-center gap-1">
+      <span className="t-caption mr-auto text-subtle">{item.date}</span>
+      <motion.button
+        type="button"
+        whileTap={{ scale: 0.9 }}
+        onClick={toggleLike}
+        aria-pressed={liked}
+        aria-label={liked ? "Убрать лайк" : "Нравится"}
+        className={`flex h-8 items-center gap-1.5 rounded-lg px-2 ${liked ? "text-loss" : "text-subtle"}`}
+      >
+        <motion.span key={String(liked)} initial={{ scale: liked ? 1.3 : 1 }} animate={{ scale: 1 }} transition={{ type: "spring", stiffness: 500, damping: 18 }}>
+          <Heart className="h-4 w-4" strokeWidth={1.75} fill={liked ? "currentColor" : "none"} aria-hidden />
+        </motion.span>
+        <span className="t-caption tabular-nums">{likes}</span>
+      </motion.button>
+      <button type="button" onClick={share} aria-label="Поделиться" className="flex h-8 w-8 items-center justify-center rounded-lg text-subtle active:bg-surface-2">
+        <Share2 className="h-4 w-4" strokeWidth={1.75} aria-hidden />
+      </button>
+    </div>
+  );
+}
 
-        <div className="mt-4 flex items-center gap-3 border-t border-white/10 pt-4">
-          <motion.button
-            type="button"
-            whileTap={{ scale: 0.94 }}
-            onClick={toggleLike}
-            className={`flex items-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-sm font-semibold transition-colors ${
-              liked
-                ? "border-[#00f0ff]/40 bg-[#00f0ff]/10 text-accent"
-                : "bg-white/[0.04] text-foreground/90 hover:border-white/20"
-            }`}
-            aria-pressed={liked}
-            aria-label={liked ? "Убрать лайк" : "Поставить лайк"}
-          >
-            <HeartIcon filled={liked} />
-            <span className="tabular-nums">{likes}</span>
-          </motion.button>
+/** Главная новость: большое фото, заголовок и мета без рамок. */
+function FeaturedNews({ item }: { item: NewsFeedItem }) {
+  return (
+    <article>
+      <NewsImage src={item.imageUrl} className="aspect-[16/10] w-full rounded-2xl" sizes="(max-width: 480px) 100vw, 480px" />
+      <h3 className="t-h3 mt-3 text-foreground">{item.title}</h3>
+      <p className="t-small mt-1 line-clamp-2 text-muted">{item.description}</p>
+      <NewsMeta item={item} />
+    </article>
+  );
+}
 
-          <motion.button
-            type="button"
-            whileTap={{ scale: 0.94 }}
-            onClick={share}
-            className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm font-semibold text-foreground/90 transition-colors hover:border-white/20"
-            aria-label="Поделиться"
-          >
-            <ShareIcon />
-            <span>Поделиться</span>
-          </motion.button>
-        </div>
+/** Остальные новости — компактные строки с миниатюрой. */
+function CompactNews({ item }: { item: NewsFeedItem }) {
+  return (
+    <article className="flex gap-3 py-4">
+      <NewsImage src={item.imageUrl} className="h-[76px] w-[96px] shrink-0 rounded-xl" sizes="96px" />
+      <div className="min-w-0 flex-1">
+        <h3 className="t-body line-clamp-2 font-medium text-foreground">{item.title}</h3>
+        <NewsMeta item={item} />
       </div>
-    </motion.article>
+    </article>
   );
 }
 
 export default function NewsFeedPanel() {
+  const [first, ...rest] = NEWS_FEED;
+  if (!first) return null;
   return (
-    <section className="flex flex-col gap-6" aria-label="Лента новостей">
-      <h3 className="mb-0 px-0.5 text-sm font-black uppercase tracking-widest text-white/50">
-        НОВОСТИ
-      </h3>
-      <div className="flex flex-col gap-6">
-        {NEWS_FEED.map((item, index) => (
-          <NewsCard key={item.id} item={item} index={index} />
-        ))}
-      </div>
+    <section aria-label="Новости клуба">
+      <SectionHeader title="Новости" />
+      <FeaturedNews item={first} />
+      {rest.length > 0 && (
+        <div className="mt-2 divide-y divide-line border-t border-line">
+          {rest.map((item) => (
+            <CompactNews key={item.id} item={item} />
+          ))}
+        </div>
+      )}
     </section>
   );
 }

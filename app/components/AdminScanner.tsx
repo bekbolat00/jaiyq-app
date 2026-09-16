@@ -160,7 +160,7 @@ export default function AdminScanner() {
                     </svg>
                   )}
                 </motion.div>
-                <p className="text-balance text-xl font-black uppercase leading-tight text-white">
+                <p className="t-h2 text-balance text-foreground">
                   {outcome.title}
                 </p>
                 <p className="text-sm font-medium text-white/90">{outcome.detail}</p>

@@ -1,100 +1,131 @@
 "use client";
 
-import { useId } from "react";
+/* eslint-disable @next/next/no-img-element -- вырезки игроков с разных доменов (KFF/Supabase), next/image тут не помогает */
+
+import { motion } from "framer-motion";
+import { useState } from "react";
 import type { Player } from "@/lib/types";
+import { positionFullLabel } from "@/lib/players/position";
 
 type Props = {
   player: Player;
   onClick?: (player: Player) => void;
 };
 
+/** Карточка игрока академии/моков — тот же макет, что и у состава из Supabase. */
 export default function PlayerCard({ player, onClick }: Props) {
-  const gid = useId().replace(/:/g, "");
-
   return (
-    <button
-      type="button"
+    <PlayerCardView
+      firstName={player.firstName}
+      surname={player.lastName}
+      number={String(player.number)}
+      position={player.position}
+      photoUrl={player.photoUrl}
       onClick={() => onClick?.(player)}
-      className="glass-premium group relative mt-10 flex aspect-[3/4.4] w-full flex-col justify-end overflow-visible rounded-2xl text-left transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_0_0_1px_rgba(0,240,255,0.35),0_0_40px_-6px_rgba(0,240,255,0.55),0_24px_64px_-24px_rgba(0,240,255,0.35)] active:scale-[0.99]"
-    >
-      {/* Figure zone lifted so head clears the card rim by ~24–28px */}
-      <div className="absolute inset-x-0 -top-7 bottom-[48%]">
-        <div className="absolute left-3 top-[calc(1.75rem+8px)] z-10 rounded-md border border-white/10 bg-black/45 px-2 py-0.5 font-mono text-[11px] font-bold text-accent backdrop-blur-md neon-cyan">
-          #{player.number}
-        </div>
-
-        <div className="absolute inset-0 flex items-end justify-center pb-1">
-          <div
-            aria-hidden
-            className="absolute bottom-[8%] left-1/2 h-[min(95%,220px)] w-[88%] max-w-[200px] -translate-x-1/2 rounded-full bg-[#00F0FF]/25 blur-[48px] transition-all duration-300 group-hover:bg-[#00F0FF]/35 group-hover:blur-[56px]"
-          />
-          <div
-            aria-hidden
-            className="h-[92%] w-[82%] rounded-t-[40%] bg-[radial-gradient(ellipse_at_center,rgba(0,240,255,0.38),transparent_72%)] transition-opacity duration-300 group-hover:opacity-100"
-          />
-        </div>
-
-        <PlayerSilhouette
-          gid={gid}
-          className="absolute inset-x-0 bottom-0 mx-auto h-[118%] w-auto -translate-y-3 text-white/90 drop-shadow-[0_12px_32px_rgba(0,240,255,0.22)] transition-transform duration-300 group-hover:scale-[1.05]"
-        />
-      </div>
-
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[5] h-[52%] bg-gradient-to-t from-[#020408] via-[#020408]/88 to-transparent" />
-
-      <div className="relative z-10 mt-auto overflow-hidden rounded-b-2xl px-3 pb-3.5 pt-10">
-        <span
-          aria-hidden
-          className="pointer-events-none absolute bottom-1 left-1/2 z-0 -translate-x-1/2 select-none font-mono text-[clamp(4.5rem,32vw,7.5rem)] font-black leading-none text-white/[0.07]"
-        >
-          {player.number}
-        </span>
-        <div className="relative z-10">
-          <p className="truncate text-[13px] font-semibold leading-tight text-foreground/90">
-            {player.firstName}
-          </p>
-          <p className="truncate text-[17px] font-bold leading-tight text-foreground">
-            {player.lastName}
-          </p>
-          <p className="neon-cyan mt-1 truncate text-[10px] font-semibold uppercase tracking-[0.18em] text-accent">
-            {player.position}
-          </p>
-        </div>
-      </div>
-    </button>
+    />
   );
 }
 
+export type PlayerCardViewProps = {
+  firstName: string;
+  surname: string;
+  /** Номер без решётки; `"—"` или пусто — номера нет. */
+  number: string;
+  /** Код (`вр`/`зщ`/`пз`/`нп`) или готовое слово. */
+  position: string;
+  photoUrl: string | null | undefined;
+  onClick?: () => void;
+};
+
+export function playerInitials(firstName: string, surname: string): string {
+  const letters = [firstName, surname]
+    .map((s) => s.trim().charAt(0))
+    .filter(Boolean)
+    .join("");
+  return letters.toUpperCase() || "—";
+}
+
 /**
- * Simple SVG silhouette stand-in until real cut-out photos are wired in.
- * Renders transparent-background "player" with premium spotlight feel.
+ * Карточка игрока: вырезка фото выходит за верхний край карточки,
+ * внизу — имя, фамилия и строка «#21 · Вратарь».
  */
-function PlayerSilhouette({
-  className,
-  gid,
-}: {
-  className?: string;
-  gid: string;
-}) {
-  const gradId = `pg-${gid}`;
+export function PlayerCardView({
+  firstName,
+  surname,
+  number,
+  position,
+  photoUrl,
+  onClick,
+}: PlayerCardViewProps) {
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const src = photoUrl?.trim() || null;
+  const showPhoto = src != null && failedSrc !== src;
+
+  const hasNumber = number.trim() !== "" && number !== "—";
+  const positionLabel = position ? positionFullLabel(position) : "";
+  const meta = [hasNumber ? `#${number}` : null, positionLabel || null]
+    .filter(Boolean)
+    .join(" · ");
+
+  const label = [firstName, surname, meta].filter(Boolean).join(", ");
+  const shared = {
+    whileTap: { scale: 0.98 },
+    transition: { duration: 0.12, ease: "easeOut" as const },
+    className:
+      "relative mt-6 block aspect-[4/5] w-full select-none rounded-2xl border border-line bg-surface text-left transition-colors duration-150 active:border-line-strong",
+  };
+
+  const content = (
+    <>
+      {/* Фото поднято над карточкой: голова выходит за верхний край. */}
+      <span aria-hidden className="absolute inset-x-0 -top-6 bottom-[72px] flex justify-center">
+        {showPhoto ? (
+          <img
+            src={src}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            onError={() => setFailedSrc(src)}
+            className="h-full w-auto max-w-full object-contain object-bottom"
+          />
+        ) : (
+          <span className="mt-10 flex h-24 w-24 items-center justify-center rounded-full bg-navy/40">
+            <span className="text-[32px] font-semibold leading-none tracking-[-0.02em] text-accent/70">
+              {playerInitials(firstName, surname)}
+            </span>
+          </span>
+        )}
+      </span>
+
+      {/* Низ: фото растворяется в поверхности, поверх — лёгкий фирменный синий. */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-[55%] rounded-b-2xl bg-gradient-to-t from-surface from-35% via-surface/85 to-transparent"
+      />
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-[48%] rounded-b-2xl bg-gradient-to-t from-navy/30 to-transparent"
+      />
+
+      <span className="absolute inset-x-0 bottom-0 flex flex-col px-3 pb-3">
+        {firstName && <span className="t-small truncate text-muted">{firstName}</span>}
+        <span className="t-h3 truncate text-foreground">{surname}</span>
+        {meta && <span className="t-caption mt-1 truncate tabular-nums text-subtle">{meta}</span>}
+      </span>
+    </>
+  );
+
+  if (!onClick) {
+    return (
+      <motion.div role="group" aria-label={label} {...shared}>
+        {content}
+      </motion.div>
+    );
+  }
+
   return (
-    <svg
-      viewBox="0 0 120 180"
-      fill="currentColor"
-      className={className}
-      aria-hidden
-    >
-      <defs>
-        <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="currentColor" stopOpacity="0.95" />
-          <stop offset="100%" stopColor="currentColor" stopOpacity="0.55" />
-        </linearGradient>
-      </defs>
-      <g fill={`url(#${gradId})`}>
-        <circle cx="60" cy="38" r="18" />
-        <path d="M28 170c0-24 14-44 32-44s32 20 32 44v10H28v-10Z" />
-        <path d="M32 95c4-10 14-18 28-18s24 8 28 18l-8 35H40l-8-35Z" />
-      </g>
-    </svg>
+    <motion.button type="button" onClick={onClick} aria-label={label} {...shared}>
+      {content}
+    </motion.button>
   );
 }

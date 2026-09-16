@@ -1,5 +1,7 @@
 "use client";
 
+import { displayCase } from "@/lib/text/displayCase";
+import { Users } from "lucide-react";
 import { useState } from "react";
 import {
   surnameFromDisplayLabel,
@@ -7,20 +9,28 @@ import {
   type LinePlayerRow,
 } from "@/lib/matches/matchDetailFromDb";
 import { formationLabelFromStarters } from "@/lib/matches/formationLayout";
+import { positionFullLabel } from "@/lib/players/position";
 import PlayerProfileModal, {
   type ProfileModalPlayer,
 } from "@/app/components/PlayerProfileModal";
+import EmptyState from "@/app/components/ui/EmptyState";
+import Tabs from "@/app/components/ui/Tabs";
 import type { Team } from "@/lib/types";
 
 type PitchPlaced = LinePlayerRow & {
   top: string;
   left: string;
-  kitColor: string;
 };
 
+
 function pitchSurnameLabel(p: LinePlayerRow): string {
-  const s = (p.surname || surnameFromDisplayLabel(p.name)).trim();
-  return s.toUpperCase();
+  return displayCase(p.surname || surnameFromDisplayLabel(p.name));
+}
+
+function initialsOf(p: LinePlayerRow): string {
+  const a = pitchSurnameLabel(p).charAt(0);
+  const b = (p.firstName ?? "").trim().charAt(0);
+  return `${a}${b}`.toUpperCase() || "—";
 }
 
 function toProfilePlayer(p: LinePlayerRow, teamName: string): ProfileModalPlayer {
@@ -42,7 +52,7 @@ function toProfilePlayer(p: LinePlayerRow, teamName: string): ProfileModalPlayer
 }
 
 /**
- * Колонка на схеме (0=вратарь .. 3=нападающий) по позиции игрока.
+ * Линия на схеме (0=вратарь .. 3=нападающий) по позиции игрока.
  * Нормализует вход регуляркой вместо точного словаря — реальные значения
  * встречаются и как «вр/зщ/пз/нп», и как полные слова/английские коды,
  * если что-то не прошло через маппинг скрапера.
@@ -68,232 +78,125 @@ function shirtNumber(p: LinePlayerRow): number {
   return Number.isFinite(n) ? n : 999;
 }
 
-const PITCH_RATIO = 720 / 440;
+/** Высота/ширина поля: вертикальная схема одной команды на всю ширину. */
+const PITCH_ASPECT = "4 / 5";
+
+/** `top` в % для линии: вратарь у нижних ворот, нападающие у центра поля сверху. */
+const TOP_BY_LINE = [86, 64, 40, 16] as const;
 
 /**
- * Горизонтальная схема (как на референсе): хозяева выстроены слева направо
- * (вратарь у левого края — нападающие ближе к центру), гости — зеркально
- * справа налево.
+ * Вертикальная схема одной команды: линии снизу вверх (вратарь → нападающие),
+ * игроки внутри линии равномерно по ширине.
  */
-function placeTeamOnPitch(
-  players: LinePlayerRow[],
-  fromLeft: boolean,
-  kitColor: string,
-): PitchPlaced[] {
+function placeTeamOnPitch(players: LinePlayerRow[]): PitchPlaced[] {
   const fieldPlayers = players.filter((p) => {
     const pos = pitchPosKey(p).toLowerCase();
     return !pos.includes("тренер");
   });
-  const columns: Record<number, LinePlayerRow[]> = { 0: [], 1: [], 2: [], 3: [] };
+  const lines: Record<number, LinePlayerRow[]> = { 0: [], 1: [], 2: [], 3: [] };
   for (const p of fieldPlayers) {
-    columns[normalizePosColumn(pitchPosKey(p))].push(p);
+    lines[normalizePosColumn(pitchPosKey(p))].push(p);
   }
 
-  // left% для каждой колонки: fromLeft=true — вратарь у левого края, атака
-  // ближе к центру; fromLeft=false — зеркально у правого края.
-  const leftByColumn = fromLeft ? [8, 22, 35, 47] : [92, 78, 65, 53];
-
   const result: PitchPlaced[] = [];
-  for (const colIdx of [0, 1, 2, 3]) {
+  for (const lineIdx of [0, 1, 2, 3]) {
     // Явно сортируем по номеру формы — порядок из БД/заявки не гарантирует
     // ничего про расположение на поле, а так хотя бы детерминированно.
-    const group = [...columns[colIdx]].sort((a, b) => shirtNumber(a) - shirtNumber(b));
+    const group = [...lines[lineIdx]].sort((a, b) => shirtNumber(a) - shirtNumber(b));
     if (!group.length) continue;
-    const left = leftByColumn[colIdx]!;
+    const top = TOP_BY_LINE[lineIdx]!;
     group.forEach((p, i) => {
-      const top = group.length === 1 ? 50 : 12 + (i / (group.length - 1)) * 76;
-      result.push({ ...p, top: `${top}%`, left: `${left}%`, kitColor });
+      const left = ((i + 0.5) / group.length) * 100;
+      result.push({ ...p, top: `${top}%`, left: `${left}%` });
     });
   }
   return result;
 }
 
-function PlayerChip({
-  num,
-  surname,
-  photoUrl,
-  top,
-  left,
-  kitColor,
-  onClick,
-}: {
-  num: string;
-  surname: string;
-  photoUrl: string | null;
-  top: string;
-  left: string;
-  kitColor: string;
-  onClick: () => void;
-}) {
+function Avatar({ player, size }: { player: LinePlayerRow; size: number }) {
   return (
-    <div
-      className="pointer-events-none absolute z-[6] -translate-x-1/2 -translate-y-1/2"
-      style={{ top, left }}
+    <span
+      className="flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-surface-2"
+      style={{ width: size, height: size }}
     >
-      <button
-        type="button"
-        onClick={onClick}
-        className="pointer-events-auto flex flex-col items-center gap-1 transition-transform active:scale-95"
-      >
-        <div
-          className="h-[clamp(28px,9cqw,44px)] w-[clamp(28px,9cqw,44px)] shrink-0 overflow-hidden rounded-full bg-[#e4e7ec]"
-          style={{ boxShadow: `0 0 0 2px ${kitColor}, 0 2px 6px rgba(0,0,0,0.25)` }}
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element -- remote/local player photo URLs */}
-          <img
-            src={photoUrl || "/default-avatar.png"}
-            alt=""
-            className="h-full w-full object-cover"
-          />
-        </div>
-        <span className="max-w-[clamp(48px,16cqw,78px)] truncate text-center text-[clamp(8px,2.4cqw,10px)] font-bold leading-tight text-[#1c2230]">
-          {num} {surname}
-        </span>
-      </button>
-    </div>
+      {player.photoUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element -- remote/local player photo URLs
+        <img src={player.photoUrl} alt="" className="h-full w-full object-cover object-top" />
+      ) : (
+        <span className="t-caption text-muted">{initialsOf(player)}</span>
+      )}
+    </span>
+  );
+}
+
+function PlayerChip({ player, onClick }: { player: PitchPlaced; onClick: () => void }) {
+  const surname = pitchSurnameLabel(player);
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={`${player.num} ${surname}`}
+      className="absolute flex w-[68px] -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-1 transition-transform duration-100 active:scale-95"
+      style={{ top: player.top, left: player.left }}
+    >
+      <span className="rounded-full ring-1 ring-line-strong">
+        <Avatar player={player} size={36} />
+      </span>
+      <span className="t-caption flex max-w-full items-baseline gap-1 text-foreground">
+        <span className="shrink-0 tabular-nums text-subtle">{player.num}</span>
+        <span className="truncate">{surname}</span>
+      </span>
+    </button>
   );
 }
 
 function PitchMarkings() {
   return (
-    <div className="pointer-events-none absolute inset-0" aria-hidden>
-      <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-gray-300" />
-      <div className="absolute left-1/2 top-1/2 h-24 w-24 -translate-x-1/2 -translate-y-1/2 rounded-full border border-gray-300" />
-      <div className="absolute left-1/2 top-1/2 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-gray-300" />
-      <div className="absolute left-0 top-1/2 h-[34%] w-[6%] -translate-y-1/2 border-y border-r border-gray-300" />
-      <div className="absolute right-0 top-1/2 h-[34%] w-[6%] -translate-y-1/2 border-y border-l border-gray-300" />
-      <div className="absolute left-0 top-0 h-4 w-4 rounded-br-full border-b border-r border-gray-300" />
-      <div className="absolute right-0 top-0 h-4 w-4 rounded-bl-full border-b border-l border-gray-300" />
-      <div className="absolute bottom-0 left-0 h-4 w-4 rounded-tr-full border-r border-t border-gray-300" />
-      <div className="absolute bottom-0 right-0 h-4 w-4 rounded-tl-full border-l border-t border-gray-300" />
+    <div className="pointer-events-none absolute inset-3 overflow-hidden rounded-lg border border-line" aria-hidden>
+      {/* Центральный круг на верхней кромке (линия середины поля). */}
+      <div className="absolute left-1/2 top-0 h-24 w-24 -translate-x-1/2 -translate-y-1/2 rounded-full border border-line" />
+      {/* Штрафная и вратарская у нижних ворот. */}
+      <div className="absolute bottom-0 left-[20%] right-[20%] h-[18%] border-x border-t border-line" />
+      <div className="absolute bottom-0 left-[36%] right-[36%] h-[7%] border-x border-t border-line" />
     </div>
   );
 }
 
-function PitchHeaderBar({
-  home,
-  away,
-  homeFormation,
-  awayFormation,
-}: {
-  home: Team;
-  away: Team;
-  homeFormation: string;
-  awayFormation: string;
-}) {
-  return (
-    <div className="relative flex h-14 w-full items-stretch overflow-hidden rounded-t-xl bg-[#101d33]">
-      <div className="flex flex-1 items-center justify-between gap-2 px-3">
-        <div className="flex min-w-0 items-center gap-2">
-          {home.logoUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={home.logoUrl}
-              alt=""
-              className="h-7 w-7 shrink-0 object-contain"
-            />
-          ) : null}
-          <span className="truncate text-[14px] font-extrabold text-white">
-            {home.shortName}
-          </span>
-        </div>
-        <span className="shrink-0 font-mono text-[12px] font-bold text-white/55">
-          {homeFormation}
-        </span>
-      </div>
-      <div className="w-px shrink-0 bg-white/15" aria-hidden />
-      <div className="flex flex-1 items-center justify-between gap-2 px-3">
-        <span className="shrink-0 font-mono text-[12px] font-bold text-white/55">
-          {awayFormation}
-        </span>
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="truncate text-[14px] font-extrabold text-white">
-            {away.shortName}
-          </span>
-          {away.logoUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={away.logoUrl}
-              alt=""
-              className="h-7 w-7 shrink-0 object-contain"
-            />
-          ) : null}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function SquadListColumn({
-  blockLabel,
-  teamName,
-  block,
+function SquadGroup({
+  title,
+  players,
   onPlayerClick,
 }: {
-  blockLabel: string;
-  teamName: string;
-  block: LineBlock;
+  title: string;
+  players: LinePlayerRow[];
   onPlayerClick: (p: LinePlayerRow) => void;
 }) {
-  const Row = ({ p }: { p: LinePlayerRow }) => (
-    <li>
-      <button
-        type="button"
-        onClick={() => onPlayerClick(p)}
-        className="flex w-full items-center gap-2 rounded-md py-0.5 text-left text-[10px] text-white/90 transition-colors hover:bg-white/5 active:bg-white/10"
-      >
-        <span
-          className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full border border-white/25 bg-white/10 text-[8px] font-mono font-bold text-accent"
-          aria-hidden
-        >
-          {p.num}
-        </span>
-        <span className="min-w-0 font-semibold uppercase">
-          {pitchSurnameLabel(p)}
-        </span>
-      </button>
-    </li>
-  );
-
+  if (!players.length) return null;
   return (
-    <div className="glass rounded-2xl p-3 sm:p-4">
-      <p className="text-center text-[7px] font-bold uppercase tracking-[0.2em] text-white/40">
-        {blockLabel}
-      </p>
-      <p className="text-center text-[8px] font-extrabold uppercase tracking-tight text-white/70">
-        {teamName}
-      </p>
-      <p className="mb-1.5 mt-3 text-[8px] font-black uppercase tracking-[0.2em] text-white/40">
-        ОСНОВНОЙ СОСТАВ
-      </p>
-      <ul className="space-y-0">
-        {block.starters.length ? (
-          block.starters.map((p) => <Row key={p.id} p={p} />)
-        ) : (
-          <li className="text-[10px] text-white/30">—</li>
-        )}
+    <section>
+      <h3 className="t-h3 mb-3 text-foreground">{title}</h3>
+      <ul className="card divide-y divide-line overflow-hidden">
+        {players.map((p) => {
+          const position = positionFullLabel(pitchPosKey(p));
+          return (
+            <li key={p.id}>
+              <button
+                type="button"
+                onClick={() => onPlayerClick(p)}
+                className="flex min-h-[56px] w-full items-center gap-3 px-4 py-2.5 text-left transition-colors active:bg-surface-2"
+              >
+                <span className="t-small w-6 shrink-0 text-right tabular-nums text-subtle">{p.num}</span>
+                <Avatar player={p} size={32} />
+                <span className="min-w-0 flex-1">
+                  <span className="t-body block truncate text-foreground">{pitchSurnameLabel(p)}</span>
+                  {position ? <span className="t-caption block truncate text-muted">{position}</span> : null}
+                </span>
+              </button>
+            </li>
+          );
+        })}
       </ul>
-      <p className="mb-1.5 mt-3 text-[8px] font-black uppercase tracking-[0.2em] text-white/40">
-        ЗАПАСНЫЕ
-      </p>
-      <ul className="space-y-0">
-        {block.bench.length ? (
-          block.bench.map((p) => <Row key={p.id} p={p} />)
-        ) : (
-          <li className="text-[10px] text-white/30">—</li>
-        )}
-      </ul>
-      <p className="mb-1.5 mt-3 text-[8px] font-black uppercase tracking-[0.2em] text-white/40">
-        ТРЕНЕРЫ
-      </p>
-      <ul className="space-y-0">
-        {block.coaches.length ? (
-          block.coaches.map((p) => <Row key={p.id} p={p} />)
-        ) : (
-          <li className="text-[10px] text-white/30">—</li>
-        )}
-      </ul>
-    </div>
+    </section>
   );
 }
 
@@ -308,82 +211,67 @@ export type FormationPitchProps = {
   awayKitColor: string;
 };
 
-export default function FormationPitch({
-  home,
-  away,
-  homeSquad,
-  awaySquad,
-  homeKitColor,
-  awayKitColor,
-}: FormationPitchProps) {
-  const [activePlayer, setActivePlayer] = useState<ProfileModalPlayer | null>(
-    null,
+type Side = "home" | "away";
+
+function isZhaiyq(team: Team): boolean {
+  return /жайык|zhaiyq/i.test(`${team.id} ${team.shortName} ${team.fullName}`);
+}
+
+export default function FormationPitch({ home, away, homeSquad, awaySquad }: FormationPitchProps) {
+  const [activePlayer, setActivePlayer] = useState<ProfileModalPlayer | null>(null);
+  const [side, setSide] = useState<Side>(() =>
+    isZhaiyq(away) && !isZhaiyq(home) && awaySquad.starters.length > 0 ? "away" : "home",
   );
-  const homePlaced = placeTeamOnPitch(homeSquad.starters, true, homeKitColor);
-  const awayPlaced = placeTeamOnPitch(awaySquad.starters, false, awayKitColor);
-  const homeFormation = formationLabelFromStarters(homeSquad.starters);
-  const awayFormation = formationLabelFromStarters(awaySquad.starters);
+
+  const team = side === "home" ? home : away;
+  const squad = side === "home" ? homeSquad : awaySquad;
+  const placed = placeTeamOnPitch(squad.starters);
+  const formation = formationLabelFromStarters(squad.starters);
+  const openPlayer = (p: LinePlayerRow) => setActivePlayer(toProfilePlayer(p, displayCase(team.shortName)));
+  const isEmpty = !squad.starters.length && !squad.bench.length && !squad.coaches.length;
 
   return (
     <div className="w-full">
-      <div className="relative w-full" style={{ containerType: "inline-size" }}>
-        <PitchHeaderBar
-          home={home}
-          away={away}
-          homeFormation={homeFormation}
-          awayFormation={awayFormation}
-        />
-        <div
-          className="relative w-full overflow-hidden rounded-b-xl border border-t-0 border-gray-300 bg-[#f6f7f9]"
-          style={{ aspectRatio: String(PITCH_RATIO) }}
-        >
-          <PitchMarkings />
-          {homePlaced.map((pl) => (
-            <PlayerChip
-              key={`h-${pl.id}`}
-              num={pl.num}
-              surname={pitchSurnameLabel(pl)}
-              photoUrl={pl.photoUrl}
-              top={pl.top}
-              left={pl.left}
-              kitColor={pl.kitColor}
-              onClick={() => setActivePlayer(toProfilePlayer(pl, home.shortName))}
-            />
-          ))}
-          {awayPlaced.map((pl) => (
-            <PlayerChip
-              key={`a-${pl.id}`}
-              num={pl.num}
-              surname={pitchSurnameLabel(pl)}
-              photoUrl={pl.photoUrl}
-              top={pl.top}
-              left={pl.left}
-              kitColor={pl.kitColor}
-              onClick={() => setActivePlayer(toProfilePlayer(pl, away.shortName))}
-            />
-          ))}
-        </div>
-      </div>
-
-      <div className="mt-5 grid min-h-0 grid-cols-1 gap-4 min-[500px]:grid-cols-2 min-[500px]:gap-5">
-        <SquadListColumn
-          blockLabel="Хозяева"
-          teamName={home.shortName}
-          block={homeSquad}
-          onPlayerClick={(p) => setActivePlayer(toProfilePlayer(p, home.shortName))}
-        />
-        <SquadListColumn
-          blockLabel="Гости"
-          teamName={away.shortName}
-          block={awaySquad}
-          onPlayerClick={(p) => setActivePlayer(toProfilePlayer(p, away.shortName))}
-        />
-      </div>
-
-      <PlayerProfileModal
-        player={activePlayer}
-        onClose={() => setActivePlayer(null)}
+      <Tabs
+        layoutId="formation-team"
+        value={side}
+        onChange={setSide}
+        tabs={[
+          { id: "home", label: displayCase(home.shortName) },
+          { id: "away", label: displayCase(away.shortName) },
+        ]}
       />
+
+      {isEmpty ? (
+        <EmptyState
+          icon={<Users className="h-6 w-6" strokeWidth={1.75} />}
+          title="Состав пока не опубликован"
+          description="Заявка появится ближе к началу матча"
+        />
+      ) : (
+        <div className="mt-4 flex flex-col gap-8">
+          {placed.length ? (
+            <div
+              className="relative w-full overflow-hidden rounded-2xl border border-line bg-navy/40"
+              style={{ aspectRatio: PITCH_ASPECT }}
+            >
+              <PitchMarkings />
+              {formation ? (
+                <span className="t-caption absolute left-5 top-4 tabular-nums text-muted">{formation}</span>
+              ) : null}
+              {placed.map((pl) => (
+                <PlayerChip key={pl.id} player={pl} onClick={() => openPlayer(pl)} />
+              ))}
+            </div>
+          ) : null}
+
+          <SquadGroup title="Основной состав" players={squad.starters} onPlayerClick={openPlayer} />
+          <SquadGroup title="Запасные" players={squad.bench} onPlayerClick={openPlayer} />
+          <SquadGroup title="Тренерский штаб" players={squad.coaches} onPlayerClick={openPlayer} />
+        </div>
+      )}
+
+      <PlayerProfileModal player={activePlayer} onClose={() => setActivePlayer(null)} />
     </div>
   );
 }

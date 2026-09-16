@@ -1,11 +1,27 @@
 "use client";
 
+import { displayCase, sentenceCase } from "@/lib/text/displayCase";
+import { useTelegramBackButton } from "@/app/hooks/useTelegramBackButton";
 import { AnimatePresence, motion } from "framer-motion";
+import {
+  AlertCircle,
+  ChevronDown,
+  Clock,
+  History,
+  Loader2,
+  Play,
+  UsersRound,
+  Video,
+} from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import { outcomeFor, ResultBadge } from "@/app/components/ui/Badges";
+import Button from "@/app/components/ui/Button";
+import Crest from "@/app/components/ui/Crest";
+import EmptyState from "@/app/components/ui/EmptyState";
+import Tabs from "@/app/components/ui/Tabs";
 import FormationPitch from "@/app/components/FormationPitch";
 import MatchDetailStatsPanel from "@/app/components/MatchDetailStatsPanel";
 import MatchTimeline from "@/app/components/MatchTimeline";
-import TeamBadge from "@/app/components/TeamBadge";
 import {
   fetchMatchWithRelationsById,
   fetchPredictionsStatsForMatch,
@@ -25,20 +41,40 @@ import type { DbMatchRow, DbPlayerRow, DbTeamRow, Team } from "@/lib/types";
 import { isSupabaseConfigured, supabase } from "@/lib/supabaseClient";
 
 const TABS = [
-  { id: "overview" as const, label: "ОБЗОР" },
-  { id: "squads" as const, label: "СОСТАВ" },
-  { id: "stats" as const, label: "СТАТИСТИКА" },
-  { id: "recent" as const, label: "ПОСЛЕДНИЕ МАТЧИ" },
-  { id: "vibe" as const, label: "ВАШЕ ЧУТЬЕ" },
-  { id: "seers" as const, label: "ЭКСТРАСЕНСЫ" },
+  { id: "overview" as const, label: "Обзор" },
+  { id: "squads" as const, label: "Состав" },
+  { id: "stats" as const, label: "Статистика" },
+  { id: "recent" as const, label: "Последние" },
 ];
+
+
+
+function hasValue(v: string | null | undefined): boolean {
+  const s = (v ?? "").trim();
+  return s !== "" && s !== "—";
+}
+
+function pluralPredictions(n: number): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return "прогноз";
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return "прогноза";
+  return "прогнозов";
+}
+
+function formatShortDate(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
+}
 
 const panelTabVariants = {
   initial: { opacity: 0, y: 8 },
   animate: {
     opacity: 1,
     y: 0,
-    transition: { duration: 0.3, ease: [0.22, 1, 0.36, 1] as const },
+    transition: { duration: 0.22, ease: [0.2, 0.8, 0.2, 1] as const },
   },
   exit: { opacity: 0, y: -6, transition: { duration: 0.18 } },
 };
@@ -103,6 +139,7 @@ type Props = {
 };
 
 export default function MatchDetailSheet({ open, onClose, matchId }: Props) {
+  useTelegramBackButton(open, onClose);
   const [tab, setTab] = useState<(typeof TABS)[number]["id"]>("overview");
   const [loading, setLoading] = useState(false);
   const [fetchErr, setFetchErr] = useState<string | null>(null);
@@ -260,6 +297,19 @@ export default function MatchDetailSheet({ open, onClose, matchId }: Props) {
   }, [open, onClose]);
 
   const showVm = vm;
+  const statusCaption = showVm ? sentenceCase(showVm.statusLabel) : "";
+  const hasScorers =
+    showVm != null && (hasValue(showVm.homeScorers) || hasValue(showVm.awayScorers));
+  const videoLinks = showVm
+    ? [
+        showVm.fullMatchUrl
+          ? { url: showVm.fullMatchUrl, label: "Трансляция", icon: <Play className="h-[18px] w-[18px]" strokeWidth={1.75} aria-hidden /> }
+          : null,
+        showVm.highlightUrl
+          ? { url: showVm.highlightUrl, label: "Видеообзор", icon: <Video className="h-[18px] w-[18px]" strokeWidth={1.75} aria-hidden /> }
+          : null,
+      ].filter((v): v is NonNullable<typeof v> => v != null)
+    : [];
 
   return (
     <AnimatePresence
@@ -277,361 +327,260 @@ export default function MatchDetailSheet({ open, onClose, matchId }: Props) {
           initial={{ y: "100%" }}
           animate={{ y: 0 }}
           exit={{ y: "100%" }}
-          transition={{ type: "spring", stiffness: 420, damping: 40 }}
+          transition={{ type: "spring", stiffness: 380, damping: 36 }}
           style={{ position: "fixed", inset: 0, zIndex: 50 }}
-          className="glass-premium flex flex-col overflow-hidden border border-white/10 bg-[#020408]/96 shadow-[inset_0_1px_0_rgba(0,240,255,0.08)] backdrop-blur-md"
+          className="flex flex-col overflow-hidden bg-background"
           role="dialog"
           aria-modal
           aria-labelledby="match-center-title"
         >
-          <button
-            type="button"
-            aria-label="Закрыть"
-            onClick={onClose}
-            className="absolute left-3 top-[max(0.5rem,env(safe-area-inset-top))] z-[60] flex h-10 w-10 items-center justify-center rounded-full border border-white/18 bg-white/[0.08] text-2xl font-light leading-none text-white transition-colors hover:bg-white/[0.14]"
-          >
-            ×
-          </button>
+          <header className="flex shrink-0 items-center gap-1 px-2 pb-1 pt-[max(0.5rem,env(safe-area-inset-top))]">
+            <button
+              type="button"
+              aria-label="Закрыть"
+              onClick={onClose}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-foreground transition-colors active:bg-surface-2"
+            >
+              <ChevronDown className="h-6 w-6" strokeWidth={1.75} aria-hidden />
+            </button>
+            <p
+              id="match-center-title"
+              className="t-label min-w-0 flex-1 truncate text-center text-subtle"
+            >
+              {showVm ? showVm.competition : "Матч-центр"}
+            </p>
+            <span className="w-11 shrink-0" aria-hidden />
+          </header>
 
           {fetchErr && !showVm && !loading ? (
-            <div className="flex flex-1 flex-col overflow-y-auto px-4 pb-8 pt-14 text-center">
-              <p className="text-sm text-rose-300/90">{fetchErr}</p>
-              <button
-                type="button"
-                onClick={onClose}
-                className="mt-4 text-xs font-bold uppercase text-accent"
-              >
-                Закрыть
-              </button>
+            <div className="flex flex-1 flex-col justify-center overflow-y-auto px-4 pb-16">
+              <EmptyState
+                icon={<AlertCircle className="h-6 w-6" strokeWidth={1.75} />}
+                title="Не удалось открыть матч"
+                description={fetchErr}
+                action={
+                  <Button variant="secondary" size="md" onClick={onClose}>
+                    Закрыть
+                  </Button>
+                }
+              />
             </div>
           ) : null}
 
           {loading && !showVm ? (
-            <div className="flex flex-1 flex-col overflow-y-auto px-4 pt-14">
-              <div className="flex flex-1 items-center justify-center p-8">
-                <p className="text-sm font-bold uppercase tracking-widest text-white/35">
-                  Матч-центр…
-                </p>
-              </div>
+            <div className="flex flex-1 flex-col items-center justify-center gap-3 pb-16">
+              <Loader2 className="h-6 w-6 animate-spin text-muted" strokeWidth={1.75} aria-hidden />
+              <p className="t-small text-muted">Загружаем матч</p>
             </div>
           ) : null}
 
           {showVm ? (
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden pt-11">
-              <div className="shrink-0 border-b border-white/8 px-4 pb-3 pt-3 sm:pl-14">
-                  <p
-                    id="match-center-title"
-                    className="text-center text-[9px] font-bold uppercase tracking-[0.2em] text-white/50"
-                  >
-                    {showVm.competition} · {showVm.statusLabel}
-                  </p>
-
-                  <div className="mt-4 flex items-stretch justify-between gap-1 sm:gap-3">
-                    <div className="flex min-w-0 flex-1 flex-col items-center gap-2 text-center">
-                      <TeamBadge team={showVm.home} size="lg" />
-                      <span className="line-clamp-2 text-[10px] font-black uppercase tracking-wide text-foreground/95">
-                        {showVm.home.shortName}
-                      </span>
-                    </div>
-
-                    <div className="flex shrink-0 flex-col items-center justify-center">
-                      <div className="flex items-center gap-0.5 font-mono text-[clamp(1.8rem,8vw,2.75rem)] font-black leading-none tabular-nums text-accent [text-shadow:0_0_24px_rgba(0,240,255,0.3)]">
-                        <motion.span
-                          initial={{ scale: 0.6, opacity: 0 }}
-                          animate={{ scale: 1, opacity: 1 }}
-                        >
-                          {showVm.homeScore}
-                        </motion.span>
-                        <span className="px-0.5 pb-1 text-[0.45em] font-bold text-white/20">
-                          :
-                        </span>
-                        <motion.span
-                          initial={{ scale: 0.6, opacity: 0 }}
-                          animate={{ scale: 1, opacity: 1 }}
-                          transition={{ delay: 0.05 }}
-                        >
-                          {showVm.awayScore}
-                        </motion.span>
-                      </div>
-                    </div>
-
-                    <div className="flex min-w-0 flex-1 flex-col items-center gap-2 text-center">
-                      <TeamBadge team={showVm.away} size="lg" />
-                      <span className="line-clamp-2 text-[10px] font-black uppercase tracking-wide text-foreground/95">
-                        {showVm.away.shortName}
-                      </span>
-                    </div>
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+              <div className="shrink-0 px-4 pb-4 pt-3">
+                <div className="grid grid-cols-[1fr_auto_1fr] items-start gap-3">
+                  <div className="flex min-w-0 flex-col items-center gap-2.5 text-center">
+                    <Crest src={showVm.home.logoUrl} alt="" size={56} />
+                    <span className="t-h3 line-clamp-2 text-foreground [overflow-wrap:anywhere]">
+                      {displayCase(showVm.home.shortName)}
+                    </span>
                   </div>
 
-                  <div className="mt-3 grid min-h-10 grid-cols-1 gap-1.5 sm:grid-cols-2">
-                    <p className="text-center text-[9px] leading-tight text-white/45 [text-wrap:balance]">
-                      <span className="text-white/50">{showVm.home.shortName}:</span>{" "}
-                      {showVm.homeScorers}
-                    </p>
-                    <p className="text-center text-[9px] leading-tight text-white/45 [text-wrap:balance]">
-                      <span className="text-white/50">{showVm.away.shortName}:</span>{" "}
-                      {showVm.awayScorers}
-                    </p>
+                  <div className="flex min-w-[96px] flex-col items-center pt-1.5">
+                    <motion.p
+                      initial={{ opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.22, ease: [0.2, 0.8, 0.2, 1] }}
+                      className="t-display whitespace-nowrap text-foreground"
+                      aria-label={`Счёт ${showVm.homeScore}:${showVm.awayScore}`}
+                    >
+                      {showVm.homeScore}
+                      <span className="px-1 text-subtle">:</span>
+                      {showVm.awayScore}
+                    </motion.p>
+                    {statusCaption ? (
+                      <p className="t-caption mt-1 text-muted">{statusCaption}</p>
+                    ) : null}
                   </div>
 
-                  {showVm.fullMatchUrl || showVm.highlightUrl ? (
-                    <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
-                      {showVm.fullMatchUrl ? (
-                        <a
-                          href={showVm.fullMatchUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#0a5c36] to-[#0f8a4f] py-3 text-center text-[10px] font-black uppercase tracking-[0.12em] text-white shadow-[0_0_20px_rgba(15,138,79,0.35)] transition-[transform,filter] active:scale-[0.99] active:brightness-95"
-                        >
-                          <svg
-                            viewBox="0 0 24 24"
-                            fill="currentColor"
-                            className="h-4 w-4 shrink-0"
-                            aria-hidden
-                          >
-                            <circle cx="12" cy="12" r="10" fillOpacity="0.25" />
-                            <path d="M10 8.5v7l6-3.5-6-3.5z" />
-                          </svg>
-                          Смотреть трансляцию
-                        </a>
-                      ) : null}
-                      {showVm.highlightUrl ? (
-                        <a
-                          href={showVm.highlightUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center justify-center gap-2 rounded-2xl border-2 border-[#0f8a4f] bg-[#0a5c36]/15 py-3 text-center text-[10px] font-black uppercase tracking-[0.12em] text-[#3fd68a] shadow-[0_0_16px_rgba(15,138,79,0.18)] transition-[transform,filter,background-color] hover:bg-[#0a5c36]/25 active:scale-[0.99]"
-                        >
-                          <svg
-                            viewBox="0 0 24 24"
-                            fill="currentColor"
-                            className="h-4 w-4 shrink-0"
-                            aria-hidden
-                          >
-                            <path d="M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4v-11l-4 4z" />
-                          </svg>
-                          Видеообзор матча
-                        </a>
-                      ) : null}
-                    </div>
-                  ) : null}
-                </div>
-
-                <div
-                  className="no-scrollbar flex shrink-0 overflow-x-auto border-b border-white/10 px-1 py-1 [scrollbar-width:none]"
-                  role="tablist"
-                >
-                  <div className="flex w-full min-w-0 flex-nowrap gap-0.5 pr-1">
-                    {TABS.map((t) => {
-                      const active = tab === t.id;
-                      return (
-                        <button
-                          key={t.id}
-                          type="button"
-                          role="tab"
-                          aria-selected={active}
-                          onClick={() => setTab(t.id)}
-                          className={`relative min-w-0 flex-1 shrink-0 basis-[28%] whitespace-nowrap rounded-xl py-2.5 px-1.5 text-center text-[7px] font-extrabold uppercase tracking-tight transition-colors sm:px-2.5 sm:text-[8px] ${
-                            active
-                              ? "text-[#020408]"
-                              : "text-white/50 hover:text-white/75"
-                          } sm:basis-0 sm:shrink sm:text-[8px] md:text-[8px] lg:text-[8px] xl:[font-size:9px] whitespace-pre-wrap leading-tight`}
-                        >
-                          {active ? (
-                            <motion.span
-                              layoutId="matchDetailSheet-cyanPill"
-                              className="absolute inset-0 z-0 rounded-xl bg-gradient-to-br from-[#00f0ff] to-[#00a8d6] shadow-[0_0_18px_rgba(0,240,255,0.4)]"
-                              transition={{ type: "spring", stiffness: 400, damping: 34 }}
-                            />
-                          ) : null}
-                          <span className="relative z-10 [text-shadow:none]">
-                            {t.label}
-                          </span>
-                        </button>
-                      );
-                    })}
+                  <div className="flex min-w-0 flex-col items-center gap-2.5 text-center">
+                    <Crest src={showVm.away.logoUrl} alt="" size={56} />
+                    <span className="t-h3 line-clamp-2 text-foreground [overflow-wrap:anywhere]">
+                      {displayCase(showVm.away.shortName)}
+                    </span>
                   </div>
                 </div>
 
-                <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto px-3 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-3 sm:px-4 sm:pl-4">
-                  <AnimatePresence mode="wait">
-                    {tab === "overview" ? (
-                      <motion.div
-                        key="ov"
-                        role="tabpanel"
-                        variants={panelTabVariants}
-                        initial="initial"
-                        animate="animate"
-                        exit="exit"
+                {hasScorers ? (
+                  <div className="mt-3 grid grid-cols-2 gap-4">
+                    <p className="t-small text-center text-muted [text-wrap:balance]">
+                      {hasValue(showVm.homeScorers) ? showVm.homeScorers : ""}
+                    </p>
+                    <p className="t-small text-center text-muted [text-wrap:balance]">
+                      {hasValue(showVm.awayScorers) ? showVm.awayScorers : ""}
+                    </p>
+                  </div>
+                ) : null}
+
+                {videoLinks.length ? (
+                  <div className={`mt-5 grid gap-2 ${videoLinks.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
+                    {videoLinks.map((v) => (
+                      <Button
+                        key={v.label}
+                        variant="secondary"
+                        size="md"
+                        fullWidth
+                        icon={v.icon}
+                        onClick={() => window.open(v.url, "_blank", "noopener,noreferrer")}
                       >
-                        <div className="glass rounded-2xl p-3 sm:p-4">
-                          {showVm.timeline.length ? (
-                            <MatchTimeline
-                              events={showVm.timeline}
-                              htScore={showVm.htScore}
-                              finalScore={{ home: showVm.homeScore, away: showVm.awayScore }}
-                              heading=""
-                            />
-                          ) : (
-                            <p className="text-center text-[12px] text-white/40">
-                              События появятся после обновления данных
-                            </p>
-                          )}
-                        </div>
-                      </motion.div>
-                    ) : null}
-                    {tab === "squads" ? (
-                      <motion.div
-                        key="sq"
-                        role="tabpanel"
-                        variants={panelTabVariants}
-                        initial="initial"
-                        animate="animate"
-                        exit="exit"
-                      >
-                        <FormationPitch
-                          home={showVm.home}
-                          away={showVm.away}
-                          homeSquad={showVm.homeSquad}
-                          awaySquad={showVm.awaySquad}
-                          homeKitColor={pitchKits.home}
-                          awayKitColor={pitchKits.away}
-                        />
-                      </motion.div>
-                    ) : null}
-                    {tab === "stats" ? (
-                      <motion.div
-                        key="st"
-                        role="tabpanel"
-                        variants={panelTabVariants}
-                        initial="initial"
-                        animate="animate"
-                        exit="exit"
-                      >
-                        <div className="glass-premium rounded-2xl p-3 sm:p-4">
-                          <MatchDetailStatsPanel
-                            stats={showVm.stats}
-                            homeName={showVm.home.shortName}
-                            awayName={showVm.away.shortName}
+                        {v.label}
+                      </Button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+
+              <Tabs
+                layoutId="match-detail-tabs"
+                value={tab}
+                onChange={setTab}
+                tabs={TABS}
+                className="mx-4 shrink-0"
+              />
+
+              <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-4">
+                <AnimatePresence mode="wait">
+                  {tab === "overview" ? (
+                    <motion.div
+                      key="ov"
+                      role="tabpanel"
+                      variants={panelTabVariants}
+                      initial="initial"
+                      animate="animate"
+                      exit="exit"
+                      className="flex flex-col gap-3"
+                    >
+                      {showVm.timeline.length ? (
+                        <div className="card px-3 py-2">
+                          <MatchTimeline
+                            events={showVm.timeline}
+                            htScore={showVm.htScore}
+                            finalScore={{ home: showVm.homeScore, away: showVm.awayScore }}
+                            heading=""
                           />
                         </div>
-                      </motion.div>
-                    ) : null}
-                    {tab === "recent" ? (
-                      <motion.div
-                        key="rc"
-                        role="tabpanel"
-                        variants={panelTabVariants}
-                        initial="initial"
-                        animate="animate"
-                        exit="exit"
-                      >
-                        {recent.length === 0 ? (
-                          <p className="text-center text-[12px] text-white/40">
-                            Другие завершённые матчи появятся в ленте турнира
-                          </p>
-                        ) : (
-                          <ul className="space-y-2.5">
-                            {recent.map((r) => {
-                              const s = matchMiniScore(r);
-                              return (
-                                <li
-                                  key={s.lid}
-                                  className="flex items-center justify-between gap-2 rounded-xl border border-white/8 bg-white/[0.04] px-3 py-2.5"
-                                >
-                                  <p className="min-w-0 text-[8px] font-bold uppercase text-white/35 [text-wrap:balance] line-clamp-1">
-                                    {r.competition}
-                                  </p>
-                                  <div className="flex min-w-0 items-center justify-end gap-2 text-right">
-                                    <p className="line-clamp-1 text-[8px] font-extrabold text-white/55 sm:text-[9px]">
-                                      {s.lTeam} · {s.rTeam}
-                                    </p>
-                                    <p className="shrink-0 font-mono text-[11px] font-bold tabular-nums text-accent">
-                                      {s.left} : {s.right}
-                                    </p>
-                                  </div>
-                                </li>
-                              );
-                            })}
-                          </ul>
-                        )}
-                      </motion.div>
-                    ) : null}
-                    {tab === "vibe" ? (
-                      <motion.div
-                        key="vibe"
-                        role="tabpanel"
-                        variants={panelTabVariants}
-                        initial="initial"
-                        animate="animate"
-                        exit="exit"
-                        className="space-y-4"
-                      >
-                        {vibe.count === 0 || vibe.avgHome == null || vibe.avgAway == null ? (
-                          <p className="text-center text-[12px] leading-relaxed text-white/45 [text-wrap:balance]">
-                            Средние ожидания от матча появятся, когда
-                            прогнозы болельщиков будут в базе — сделайте
-                            прогноз в «Zhaiyq Эксперт» на следующем туре.
-                          </p>
-                        ) : (
-                          <div className="glass overflow-hidden rounded-2xl p-4">
-                            <p className="text-center text-[9px] font-bold uppercase tracking-widest text-white/40">
-                              Средний «чуй» толпы
-                            </p>
-                            <p className="mt-2 text-center font-mono text-3xl font-black tabular-nums text-accent">
-                              {vibe.avgHome.toFixed(1)}{" "}
-                              <span className="text-white/25">:</span>{" "}
-                              {vibe.avgAway.toFixed(1)}
-                            </p>
-                            <p className="mt-1 text-center text-[10px] text-white/35">
-                              {vibe.count}{" "}
-                              {vibe.count === 1
-                                ? "записанный прогноз"
-                                : "записанных прогнозов"}{" "}
-                              / матч
-                            </p>
-                            <p className="mt-3 text-center text-[10px] leading-relaxed text-white/45">
-                              Данные: таблица{" "}
-                              <span className="text-white/60">match_predictions</span>{" "}
-                              (Supabase).
+                      ) : (
+                        <div className="card">
+                          <EmptyState
+                            icon={<Clock className="h-6 w-6" strokeWidth={1.75} />}
+                            title="Событий пока нет"
+                            description="Голы, карточки и замены появятся после обновления данных"
+                          />
+                        </div>
+                      )}
+
+                      {vibe.count > 0 && vibe.avgHome != null && vibe.avgAway != null ? (
+                        <div className="card flex items-center gap-4 p-4">
+                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-surface-2 text-muted">
+                            <UsersRound className="h-5 w-5" strokeWidth={1.75} aria-hidden />
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <p className="t-body text-foreground">Прогноз болельщиков</p>
+                            <p className="t-small text-muted">
+                              {vibe.count} {pluralPredictions(vibe.count)} · средний счёт
                             </p>
                           </div>
-                        )}
-                      </motion.div>
-                    ) : null}
-                    {tab === "seers" ? (
-                      <motion.div
-                        key="seers"
-                        role="tabpanel"
-                        variants={panelTabVariants}
-                        initial="initial"
-                        animate="animate"
-                        exit="exit"
-                        className="space-y-3"
-                      >
-                        <p className="text-center text-[12px] leading-relaxed text-white/45 [text-wrap:balance]">
-                          <span className="font-semibold text-white/60">
-                            Экстрасенсы
-                          </span>{" "}
-                          — тот, кто чаще всего попадает в сетку
-                          <span className="text-white/30">: </span>
-                          точность сравниваем с итоговым счётом, когда
-                          вступят поля <span className="text-white/55">score</span> в
-                          прогнозах.
-                        </p>
-                        <div className="glass rounded-2xl p-4 text-center text-[10px] text-white/50">
-                          Сейчас:{" "}
-                          <span className="font-bold text-white/80">
-                            {vibe.count}
-                          </span>{" "}
-                          {vibe.count === 1 ? "строка" : "строк"} в прогнозах на
-                          этот матч. Лидерборд по метрике скоро подключим к
-                          сравнению с реальным результатом.
+                          <p className="t-h3 shrink-0 tabular-nums text-foreground">
+                            {vibe.avgHome.toFixed(1)}
+                            <span className="px-0.5 text-subtle">:</span>
+                            {vibe.avgAway.toFixed(1)}
+                          </p>
                         </div>
-                      </motion.div>
-                    ) : null}
-                  </AnimatePresence>
-                </div>
+                      ) : null}
+                    </motion.div>
+                  ) : null}
+                  {tab === "squads" ? (
+                    <motion.div
+                      key="sq"
+                      role="tabpanel"
+                      variants={panelTabVariants}
+                      initial="initial"
+                      animate="animate"
+                      exit="exit"
+                    >
+                      <FormationPitch
+                        home={showVm.home}
+                        away={showVm.away}
+                        homeSquad={showVm.homeSquad}
+                        awaySquad={showVm.awaySquad}
+                        homeKitColor={pitchKits.home}
+                        awayKitColor={pitchKits.away}
+                      />
+                    </motion.div>
+                  ) : null}
+                  {tab === "stats" ? (
+                    <motion.div
+                      key="st"
+                      role="tabpanel"
+                      variants={panelTabVariants}
+                      initial="initial"
+                      animate="animate"
+                      exit="exit"
+                    >
+                      <MatchDetailStatsPanel
+                        stats={showVm.stats}
+                        homeName={displayCase(showVm.home.shortName)}
+                        awayName={displayCase(showVm.away.shortName)}
+                      />
+                    </motion.div>
+                  ) : null}
+                  {tab === "recent" ? (
+                    <motion.div
+                      key="rc"
+                      role="tabpanel"
+                      variants={panelTabVariants}
+                      initial="initial"
+                      animate="animate"
+                      exit="exit"
+                    >
+                      {recent.length === 0 ? (
+                        <div className="card">
+                          <EmptyState
+                            icon={<History className="h-6 w-6" strokeWidth={1.75} />}
+                            title="Других матчей пока нет"
+                            description="Сыгранные матчи турнира появятся здесь"
+                          />
+                        </div>
+                      ) : (
+                        <ul className="card divide-y divide-line overflow-hidden">
+                          {recent.map((r) => {
+                            const s = matchMiniScore(r);
+                            const outcome = outcomeFor(r.zhaiyq_score, r.opponent_score);
+                            return (
+                              <li
+                                key={s.lid}
+                                className="flex min-h-[64px] items-center gap-3 px-4 py-3"
+                              >
+                                <div className="min-w-0 flex-1">
+                                  <p className="t-body truncate text-foreground">
+                                    {displayCase(s.lTeam)} — {displayCase(s.rTeam)}
+                                  </p>
+                                  <p className="t-small truncate text-muted">
+                                    {[r.competition, formatShortDate(r.match_date)].filter(Boolean).join(" · ")}
+                                  </p>
+                                </div>
+                                <span className="t-h3 shrink-0 tabular-nums text-foreground">
+                                  {s.left}:{s.right}
+                                </span>
+                                {outcome ? <ResultBadge outcome={outcome} /> : null}
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      )}
+                    </motion.div>
+                  ) : null}
+                </AnimatePresence>
+              </div>
             </div>
           ) : null}
         </motion.div>

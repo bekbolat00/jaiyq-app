@@ -1,8 +1,10 @@
 "use client";
 
+import { useTelegramBackButton } from "@/app/hooks/useTelegramBackButton";
 import { AnimatePresence, motion } from "framer-motion";
-import { ChevronLeft } from "lucide-react";
+import { BellOff, X } from "lucide-react";
 import { useEffect } from "react";
+import EmptyState from "@/app/components/ui/EmptyState";
 import type { AppNotification } from "@/lib/types";
 
 type Props = {
@@ -13,7 +15,7 @@ type Props = {
 
 const backdropVariants = {
   hidden: { opacity: 0 },
-  visible: { opacity: 1, transition: { duration: 0.22, ease: [0.22, 1, 0.36, 1] as const } },
+  visible: { opacity: 1, transition: { duration: 0.22 } },
   exit: { opacity: 0, transition: { duration: 0.18 } },
 };
 
@@ -21,26 +23,25 @@ const sheetVariants = {
   hidden: { y: "100%" },
   visible: {
     y: 0,
-    transition: { type: "spring" as const, stiffness: 420, damping: 40 },
+    transition: { type: "spring" as const, stiffness: 380, damping: 36 },
   },
-  exit: { y: "100%", transition: { duration: 0.28, ease: [0.4, 0, 0.2, 1] as const } },
+  exit: { y: "100%", transition: { duration: 0.24, ease: [0.4, 0, 0.2, 1] as const } },
 };
 
-function InitialBadge({ initial, tone }: { initial: string; tone: "orange" | "cyan" }) {
-  const cls =
-    tone === "orange"
-      ? "bg-[#f97316] text-[#020408] shadow-[0_0_20px_rgba(249,115,22,0.35)]"
-      : "bg-accent text-[#020408] shadow-[0_0_18px_rgba(0,240,255,0.28)]";
+function InitialBadge({ initial, tone }: { initial: string; tone: AppNotification["tone"] }) {
+  const cls = tone === "orange" ? "bg-draw/12 text-draw" : "bg-accent/10 text-accent";
   return (
     <span
-      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[13px] font-black uppercase ${cls}`}
+      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[15px] font-semibold ${cls}`}
+      aria-hidden
     >
-      {initial.slice(0, 1)}
+      {initial.slice(0, 1).toUpperCase()}
     </span>
   );
 }
 
 export default function NotificationsSheet({ open, onClose, items }: Props) {
+  useTelegramBackButton(open, onClose);
   useEffect(() => {
     if (!open) return;
     const original = document.body.style.overflow;
@@ -60,16 +61,15 @@ export default function NotificationsSheet({ open, onClose, items }: Props) {
       {open ? (
         <motion.div
           className="fixed inset-0 z-[75] flex flex-col justify-end"
-          initial={{ opacity: 0 }}
+          initial={{ opacity: 1 }}
           animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.2 }}
+          exit={{ opacity: 1 }}
           role="presentation"
         >
           <motion.button
             type="button"
             aria-label="Закрыть"
-            className="absolute inset-0 bg-[#020408]/72 backdrop-blur-sm"
+            className="absolute inset-0 bg-background/70"
             variants={backdropVariants}
             initial="hidden"
             animate="visible"
@@ -84,71 +84,65 @@ export default function NotificationsSheet({ open, onClose, items }: Props) {
             initial="hidden"
             animate="visible"
             exit="exit"
-            className="glass-premium relative z-10 mx-auto flex h-[min(88vh,820px)] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl border border-white/10 border-b-0 bg-[#020408]/95 shadow-[0_-12px_48px_rgba(0,0,0,0.55)]"
+            className="relative z-10 mx-auto flex max-h-[min(88vh,820px)] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl border-t border-line bg-surface"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="mx-auto mt-2.5 h-1 w-10 shrink-0 rounded-full bg-white/15" aria-hidden />
+            <div className="mx-auto mt-2 h-1 w-9 shrink-0 rounded-full bg-line-strong" aria-hidden />
 
-            <header className="flex shrink-0 items-center gap-3 border-b border-white/10 px-3 pb-3 pt-[max(0.5rem,env(safe-area-inset-top))]">
+            <header className="flex shrink-0 items-center justify-between gap-3 px-4 pb-3 pt-4">
+              <h2 id="notifications-sheet-title" className="t-h2 text-foreground">
+                Уведомления
+              </h2>
               <button
                 type="button"
                 onClick={onClose}
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-foreground transition-colors hover:bg-white/[0.06]"
-                aria-label="Назад"
+                className="-mr-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-2 text-muted transition-colors active:text-foreground"
+                aria-label="Закрыть"
               >
-                <ChevronLeft className="h-6 w-6" strokeWidth={2} aria-hidden />
+                <X className="h-[18px] w-[18px]" strokeWidth={1.75} aria-hidden />
               </button>
-              <h1
-                id="notifications-sheet-title"
-                className="min-w-0 flex-1 text-lg font-bold uppercase italic tracking-wide text-foreground"
-              >
-                Уведомления
-              </h1>
-              <span className="w-10 shrink-0" aria-hidden />
             </header>
 
-            <motion.div
-              className="min-h-0 flex-1 overflow-y-auto px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-4"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1], delay: 0.05 }}
-            >
+            <div className="min-h-0 flex-1 overflow-y-auto pb-[max(1.25rem,env(safe-area-inset-bottom))]">
               {items.length === 0 ? (
-                <p className="py-16 text-center text-sm text-muted">Пока пусто</p>
+                <EmptyState
+                  icon={<BellOff className="h-6 w-6" strokeWidth={1.75} aria-hidden />}
+                  title="Уведомлений пока нет"
+                  description="Здесь появятся новости клуба и напоминания о матчах."
+                />
               ) : (
-                <ul className="space-y-3">
+                <ul className="divide-y divide-line border-t border-line">
                   {items.map((n, i) => (
                     <motion.li
                       key={n.id}
-                      initial={{ opacity: 0, y: 12 }}
+                      initial={{ opacity: 0, y: 8 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{
-                        delay: 0.04 * i,
-                        duration: 0.32,
-                        ease: [0.22, 1, 0.36, 1],
+                        delay: Math.min(i, 5) * 0.04,
+                        duration: 0.22,
+                        ease: [0.2, 0.8, 0.2, 1],
                       }}
+                      className="flex items-start gap-3 px-4 py-3"
                     >
-                      <div
-                        className={`glass-premium flex items-start gap-3 rounded-2xl border border-white/[0.08] px-3 py-3 shadow-[0_0_24px_rgba(0,0,0,0.35)] ${
-                          n.isNew ? "ring-1 ring-white/10" : ""
-                        }`}
-                      >
-                        <InitialBadge initial={n.initial} tone={n.tone} />
-                        <p className="min-w-0 flex-1 text-left text-[13px] leading-snug text-foreground/95">
+                      <InitialBadge initial={n.initial} tone={n.tone} />
+                      <div className="min-w-0 flex-1">
+                        <p className={`t-body ${n.isNew ? "text-foreground" : "text-muted"}`}>
                           {n.text}
                         </p>
-                        <time
-                          className="shrink-0 self-start pt-0.5 text-right text-[10px] font-medium text-muted"
-                          dateTime={n.date}
-                        >
+                        <time className="t-caption mt-1 block tabular-nums text-muted" dateTime={n.date}>
                           {n.date}
                         </time>
                       </div>
+                      {n.isNew ? (
+                        <span className="mt-2 h-2 w-2 shrink-0 rounded-full bg-accent">
+                          <span className="sr-only">Новое</span>
+                        </span>
+                      ) : null}
                     </motion.li>
                   ))}
                 </ul>
               )}
-            </motion.div>
+            </div>
           </motion.aside>
         </motion.div>
       ) : null}

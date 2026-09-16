@@ -23,7 +23,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#020408",
+  themeColor: "#050A1C",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
@@ -50,11 +50,7 @@ export default function RootLayout({
         <TelegramAuth />
         <AppShell>
           <MusicPlayerProvider>
-            <div className="bg-depth-orbs" aria-hidden>
-              <span className="bg-orb" />
-              <span className="bg-orb" />
-              <span className="bg-orb" />
-            </div>
+            <div className="app-backdrop" aria-hidden />
             <div className="relative z-10 mx-auto flex h-dvh min-h-0 w-full max-w-[480px] flex-col">
               <main className="safe-top safe-bottom min-h-0 flex-1 overflow-y-auto px-4 pb-24 hide-scrollbar">
                 {children}

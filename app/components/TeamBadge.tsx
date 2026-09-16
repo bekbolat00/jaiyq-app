@@ -18,13 +18,14 @@ const LOGO_PX: Record<NonNullable<Props["size"]>, number> = {
   xl: 72,
 };
 
-const WRAP: Record<NonNullable<Props["size"]>, { box: string; mono: string; ring: string }> = {
-  sm: { box: "h-8 w-8", mono: "text-[10px]", ring: "border" },
-  md: { box: "h-12 w-12", mono: "text-xs", ring: "border" },
-  lg: { box: "h-14 w-14", mono: "text-sm", ring: "border-2" },
-  xl: { box: "h-[4.5rem] w-[4.5rem]", mono: "text-sm", ring: "border-2" },
+const WRAP: Record<NonNullable<Props["size"]>, { box: string; text: string }> = {
+  sm: { box: "h-8 w-8", text: "text-[11px]" },
+  md: { box: "h-12 w-12", text: "text-[13px]" },
+  lg: { box: "h-14 w-14", text: "text-[15px]" },
+  xl: { box: "h-[4.5rem] w-[4.5rem]", text: "text-[17px]" },
 };
 
+/** Логотип клуба в спокойном круге `surface-2`; без логотипа — инициалы. */
 export default function TeamBadge({ team, size = "md", logoVariant = "default" }: Props) {
   const s = WRAP[size];
   const isStandingsStyle = logoVariant === "standings";
@@ -34,17 +35,10 @@ export default function TeamBadge({ team, size = "md", logoVariant = "default" }
   const px = LOGO_PX[size];
   const [logoFailed, setLogoFailed] = useState(false);
   const showLogo = team.logoUrl && !logoFailed;
-  const useStandingsFallback = isStandingsStyle && !showLogo;
 
   return (
     <div
-      className={`${s.box} ${s.ring} relative flex shrink-0 items-center justify-center overflow-hidden rounded-full border-white/10 ${
-        useStandingsFallback
-          ? "bg-white/10"
-          : "bg-gradient-to-br from-white/10 to-white/[0.02]"
-      } ${
-        useStandingsFallback ? "font-sans" : "font-mono " + s.mono
-      } font-bold tracking-wider text-foreground shadow-inner`}
+      className={`${s.box} relative flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-surface-2`}
       aria-label={team.fullName}
     >
       {showLogo ? (
@@ -53,20 +47,12 @@ export default function TeamBadge({ team, size = "md", logoVariant = "default" }
           alt=""
           width={px}
           height={px}
-          className="h-full w-full object-contain p-0.5"
+          className="h-[80%] w-[80%] object-contain"
           sizes={`${px}px`}
           onError={() => setLogoFailed(true)}
         />
       ) : (
-        <span
-          className={`leading-none ${
-            useStandingsFallback
-              ? "px-0.5 text-center text-xs font-bold"
-              : s.mono
-          }`}
-        >
-          {initials}
-        </span>
+        <span className={`${s.text} font-semibold leading-none text-muted`}>{initials}</span>
       )}
     </div>
   );

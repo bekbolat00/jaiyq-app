@@ -1,32 +1,55 @@
 @import "tailwindcss";
 
+/*
+ * Дизайн-система «Matchday» — см. DESIGN_SYSTEM.md.
+ * Палитра взята из герба: щит #0E1F73, контур #00F5F5, волны #00C8D8/#0A7FA8.
+ */
 :root {
-  --background: #020408;
-  --background-soft: #050a12;
-  --surface: #0a1220;
-  --surface-2: #0e1830;
-  --foreground: #f5f7ff;
-  --muted: #8b98b8;
-  --border: rgba(255, 255, 255, 0.1);
-  --accent: #00f0ff;
-  --accent-strong: #00ffff;
-  --accent-shadow: rgba(0, 240, 255, 0.5);
-  --danger: #ff4d6d;
+  --background: #050a1c;
+  --surface: #0a1433;
+  --surface-2: #0f1c45;
+  --navy: #0e1f73;
+  --foreground: #f3f6ff;
+  --muted: #a3afcf;
+  --subtle: #6b78a0;
+  --line: rgba(150, 180, 255, 0.1);
+  --line-strong: rgba(150, 180, 255, 0.18);
+  --accent: #00e8f0;
+  --wave: #00c8d8;
+  --deep: #0a7fa8;
+  --on-accent: #041226;
+  --win: #34d399;
+  --draw: #fbbf24;
+  --loss: #f87171;
+  --live: #ff4d5e;
 }
 
 @theme inline {
   --color-background: var(--background);
-  --color-background-soft: var(--background-soft);
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);
+  --color-navy: var(--navy);
   --color-foreground: var(--foreground);
   --color-muted: var(--muted);
-  --color-border: var(--border);
+  --color-subtle: var(--subtle);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-border: var(--line);
   --color-accent: var(--accent);
-  --color-accent-strong: var(--accent-strong);
-  --color-danger: var(--danger);
+  --color-accent-strong: var(--accent);
+  --color-wave: var(--wave);
+  --color-deep: var(--deep);
+  --color-on-accent: var(--on-accent);
+  --color-win: var(--win);
+  --color-draw: var(--draw);
+  --color-loss: var(--loss);
+  --color-live: var(--live);
+  --color-danger: var(--loss);
+  /* Устаревшие имена — чтобы старые классы не ломались. */
+  --color-background-soft: var(--background);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --ease-out-soft: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 html,
@@ -37,155 +60,126 @@ body {
   -moz-osx-font-smoothing: grayscale;
   font-family: var(--font-geist-sans), -apple-system, BlinkMacSystemFont,
     "Segoe UI", Roboto, sans-serif;
+  font-feature-settings: "ss01", "cv11";
+  -webkit-tap-highlight-color: transparent;
 }
 
 h1,
 h2,
 h3 {
-  font-weight: 700;
+  font-weight: 600;
 }
 
 body {
   position: relative;
-  background-color: #020408;
+  background-color: var(--background);
   min-height: 100dvh;
 }
 
-/* Slow depth field — huge blurred cyan orbs (under content, see layout) */
-.bg-depth-orbs {
+/*
+ * Фон: «ночное небо над Жайыком» — едва заметное фирменное синее свечение
+ * сверху экрана. Статичное, без анимации и огромных размытий.
+ */
+.app-backdrop {
   position: fixed;
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  overflow: hidden;
+  background:
+    radial-gradient(120% 60% at 50% -10%, rgba(14, 31, 115, 0.55) 0%, rgba(14, 31, 115, 0) 70%),
+    var(--background);
 }
 
-.bg-depth-orbs .bg-orb {
-  position: absolute;
-  width: min(140vw, 920px);
-  height: min(140vw, 920px);
-  border-radius: 50%;
-  background: #00f0ff;
-  opacity: 0.1;
-  filter: blur(120px);
-  will-change: transform;
+/* ─── Типографика ─────────────────────────────────────────────── */
+
+@utility t-display {
+  font-size: 44px;
+  line-height: 48px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+@utility t-h1 {
+  font-size: 28px;
+  line-height: 34px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+@utility t-h2 {
+  font-size: 20px;
+  line-height: 26px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+@utility t-h3 {
+  font-size: 17px;
+  line-height: 22px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+}
+@utility t-body {
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 400;
+}
+@utility t-small {
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 400;
+}
+@utility t-caption {
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 500;
+}
+@utility t-label {
+  font-size: 11px;
+  line-height: 14px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
-.bg-depth-orbs .bg-orb:nth-child(1) {
-  left: -25%;
-  top: -15%;
-  animation: bg-orb-float-a 28s ease-in-out infinite;
+/* ─── Поверхности ─────────────────────────────────────────────── */
+
+@utility card {
+  border-radius: 16px;
+  background-color: var(--surface);
+  border: 1px solid var(--line);
 }
 
-.bg-depth-orbs .bg-orb:nth-child(2) {
-  right: -30%;
-  top: 20%;
-  width: min(120vw, 780px);
-  height: min(120vw, 780px);
-  animation: bg-orb-float-b 34s ease-in-out infinite;
-}
-
-.bg-depth-orbs .bg-orb:nth-child(3) {
-  left: 5%;
-  bottom: -25%;
-  width: min(130vw, 820px);
-  height: min(130vw, 820px);
-  animation: bg-orb-float-c 31s ease-in-out infinite;
-}
-
-@keyframes bg-orb-float-a {
-  0%,
-  100% {
-    transform: translate(0, 0) scale(1);
-  }
-  50% {
-    transform: translate(8%, 12%) scale(1.08);
-  }
-}
-
-@keyframes bg-orb-float-b {
-  0%,
-  100% {
-    transform: translate(0, 0) scale(1.05);
-  }
-  50% {
-    transform: translate(-10%, 8%) scale(1);
-  }
-}
-
-@keyframes bg-orb-float-c {
-  0%,
-  100% {
-    transform: translate(0, 0) scale(1);
-  }
-  50% {
-    transform: translate(12%, -10%) scale(1.06);
-  }
-}
-
-/** Neon glow for accent #00F0FF (text, icons, strokes) */
+/*
+ * Устаревшие «неоновые» и «стеклянные» классы. Их ещё используют экраны,
+ * до которых не дошёл редизайн, — приглушаем до спокойной поверхности,
+ * чтобы старый код сразу выглядел в новой системе. В новом коде не использовать.
+ */
 .neon-cyan {
-  filter: drop-shadow(0 0 4px #00f0ff) drop-shadow(0 0 12px rgba(0, 240, 255, 0.55))
-    drop-shadow(0 0 24px rgba(0, 240, 255, 0.25));
+  filter: none;
 }
-
-/** Solid / surface accent glow */
 .neon-cyan-surface {
-  box-shadow:
-    0 0 16px rgba(0, 240, 255, 0.45),
-    0 0 32px rgba(0, 240, 255, 0.2),
-    0 0 0 1px rgba(0, 240, 255, 0.15);
+  box-shadow: none;
 }
-
-/* Glassmorphism — hard frosted panels */
-.glass {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(40px);
-  -webkit-backdrop-filter: blur(40px);
-}
-
-.glass-strong {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(40px);
-  -webkit-backdrop-filter: blur(40px);
-  box-shadow: 0 24px 80px -32px rgba(0, 0, 0, 0.85);
-}
-
-/* Premium glass for high-value cards (players, tickets) */
+.glass,
+.glass-strong,
 .glass-premium {
-  position: relative;
-  background: linear-gradient(
-      165deg,
-      rgba(255, 255, 255, 0.08) 0%,
-      rgba(255, 255, 255, 0.03) 42%,
-      rgba(255, 255, 255, 0.02) 100%
-    ),
-    rgba(6, 12, 22, 0.45);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(64px);
-  -webkit-backdrop-filter: blur(64px);
-  box-shadow:
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.16),
-    inset 0 0 48px -24px rgba(255, 255, 255, 0.06),
-    inset 0 -1px 0 0 rgba(0, 0, 0, 0.2),
-    0 0 0 1px rgba(255, 255, 255, 0.04);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: none;
 }
-
-.accent-glow {
-  box-shadow:
-    0 10px 40px -10px var(--accent-shadow),
-    0 0 24px rgba(0, 240, 255, 0.35);
-  filter: drop-shadow(0 0 10px rgba(0, 240, 255, 0.45));
-}
-
+.accent-glow,
 .accent-glow-strong {
-  box-shadow:
-    0 0 0 1px rgba(0, 240, 255, 0.25),
-    0 0 28px rgba(0, 240, 255, 0.55),
-    0 20px 60px -20px rgba(0, 240, 255, 0.35);
-  filter: drop-shadow(0 0 14px rgba(0, 240, 255, 0.5));
+  box-shadow: none;
+  filter: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+  }
 }
 
 /* Hide scrollbars for a cleaner mobile feel */

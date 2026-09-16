@@ -391,6 +391,25 @@ function isGoalEventType(ev: DbMatchEventRow): boolean {
   return eventTypeToTimeline(ev) === "goal";
 }
 
+function isOwnGoal(ev: DbMatchEventRow): boolean {
+  return (ev.event_type ?? ev.type ?? "").toString().toLowerCase() === "own_goal";
+}
+
+/**
+ * Кому засчитан гол. У автогола KFF (и наш импорт) пишет `team_id` команды
+ * игрока, забившего в свои ворота, — мяч при этом идёт сопернику. Без этого
+ * матч 11.09 (Жайык 1:2 Шахтёр) по событиям считался как 0:3.
+ */
+export function goalSide(
+  ev: DbMatchEventRow,
+  homeId: string | null,
+  awayId: string | null,
+): "home" | "away" {
+  const side = sideFromTeamId(ev.team_id, homeId, awayId);
+  if (!isOwnGoal(ev)) return side;
+  return side === "home" ? "away" : "home";
+}
+
 /** Счёт на перерыве: голы с минутой ≤ 45. */
 export function computeHalfTimeScore(
   events: DbMatchEventRow[] | null | undefined,
@@ -401,7 +420,7 @@ export function computeHalfTimeScore(
   let away = 0;
   for (const ev of events ?? []) {
     if (ev.minute > 45 || !isGoalEventType(ev)) continue;
-    if (sideFromTeamId(ev.team_id, homeId, awayId) === "home") home += 1;
+    if (goalSide(ev, homeId, awayId) === "home") home += 1;
     else away += 1;
   }
   return { home, away };
@@ -423,8 +442,10 @@ export function buildRichTimeline(
   let awayScore = 0;
 
   return sorted.map((ev) => {
-    const side = sideFromTeamId(ev.team_id, homeId, awayId);
     const type = eventTypeToTimeline(ev);
+    // Гол показываем на стороне команды, которой он засчитан (важно для автогола).
+    const side = type === "goal" ? goalSide(ev, homeId, awayId) : sideFromTeamId(ev.team_id, homeId, awayId);
+    const ownGoal = type === "goal" && isOwnGoal(ev);
     const rawType = (ev.event_type ?? ev.type ?? "").toString().toLowerCase();
     const isPenalty = rawType === "penalty";
 
@@ -458,6 +479,7 @@ export function buildRichTimeline(
       playerName: mainName,
       playerOutName: type === "sub" ? outName : undefined,
       isPenalty,
+      isOwnGoal: ownGoal,
       scoreAfter: type === "goal" ? { home: homeScore, away: awayScore } : undefined,
       videoUrl: null,
     };
@@ -560,11 +582,9 @@ export function buildMatchDetailViewModel(
 
   const evs = [...(m.match_events ?? [])].sort((a, b) => a.minute - b.minute);
   const timeline: LiveTimelineEvent[] = evs.map((ev) => {
-    const side = sideFromTeamId(
-      ev.team_id,
-      homeId,
-      awayId,
-    );
+    const side = isGoalEventType(ev)
+      ? goalSide(ev, homeId, awayId)
+      : sideFromTeamId(ev.team_id, homeId, awayId);
     return {
       id: ev.id,
       minute: ev.minute,
@@ -575,16 +595,17 @@ export function buildMatchDetailViewModel(
   });
 
   const goals = evs.filter((e) => eventTypeToTimeline(e) === "goal");
-  const homeG = goals.filter((g) => g.team_id === homeId);
-  const awayG = goals.filter((g) => g.team_id === awayId);
+  const homeG = homeId && awayId ? goals.filter((g) => goalSide(g, homeId, awayId) === "home") : [];
+  const awayG = homeId && awayId ? goals.filter((g) => goalSide(g, homeId, awayId) === "away") : [];
   const fmt = (g: DbMatchEventRow) => {
+    const own = isOwnGoal(g) ? " (авт.)" : "";
     const t = g.description?.trim() || g.details;
     if (t) {
-      if (/\d+\s*['′`]?\s*$/i.test(t)) return t;
-      return `${t} ${g.minute}'`;
+      if (/\d+\s*['′`]?\s*$/i.test(t)) return `${t}${own}`;
+      return `${t} ${g.minute}'${own}`;
     }
-    if (g.player) return `${playerLabel(g.player, "")} ${g.minute}'`.trim();
-    return `${g.minute}'`;
+    if (g.player) return `${playerLabel(g.player, "")} ${g.minute}'${own}`.trim();
+    return `${g.minute}'${own}`;
   };
   return {
     base,

@@ -1,6 +1,11 @@
 "use client";
 
+import { useTelegramBackButton } from "@/app/hooks/useTelegramBackButton";
 import { AnimatePresence, motion } from "framer-motion";
+import { Coins } from "lucide-react";
+import { useEffect } from "react";
+import Button from "@/app/components/ui/Button";
+import { haptic } from "@/lib/telegram/webApp";
 
 type Props = {
   open: boolean;
@@ -16,30 +21,49 @@ const backdrop = {
 };
 
 const panel = {
-  hidden: { y: 28, opacity: 0 },
+  hidden: { y: "100%" },
   visible: {
     y: 0,
-    opacity: 1,
-    transition: { type: "spring" as const, stiffness: 400, damping: 34 },
+    transition: { type: "spring" as const, stiffness: 380, damping: 36 },
   },
-  exit: { y: 20, opacity: 0, transition: { duration: 0.2 } },
+  exit: { y: "100%", transition: { duration: 0.24, ease: [0.4, 0, 0.2, 1] as const } },
 };
 
+function daysWord(n: number) {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return "день";
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return "дня";
+  return "дней";
+}
+
 export default function DailyCoinsSheet({ open, onClose, streak, bonusAmount }: Props) {
+  useTelegramBackButton(open, onClose);
+
+  useEffect(() => {
+    if (!open) return;
+    haptic.notify("success");
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
   return (
     <AnimatePresence>
       {open ? (
         <motion.div
-          className="fixed inset-0 z-[80] flex items-end justify-center sm:items-center"
+          className="fixed inset-0 z-[80] flex flex-col justify-end"
           initial="hidden"
           animate="visible"
-          exit="hidden"
+          exit="exit"
         >
           <motion.button
             type="button"
             aria-label="Закрыть"
             variants={backdrop}
-            className="absolute inset-0 bg-black/65 backdrop-blur-[2px]"
+            className="absolute inset-0 bg-background/70"
             onClick={onClose}
           />
           <motion.div
@@ -47,35 +71,42 @@ export default function DailyCoinsSheet({ open, onClose, streak, bonusAmount }: 
             aria-modal="true"
             aria-labelledby="daily-coins-title"
             variants={panel}
-            className="relative z-10 mx-4 mb-[max(1.5rem,env(safe-area-inset-bottom))] w-full max-w-[min(420px,calc(100vw-2rem))] overflow-hidden rounded-3xl border border-accent/30 bg-[#050a10]/95 shadow-[0_0_60px_rgba(0,240,255,0.2),inset_0_0_0_1px_rgba(255,255,255,0.06)] backdrop-blur-xl sm:mb-0"
+            className="relative z-10 mx-auto w-full max-w-lg rounded-t-3xl border-t border-line bg-surface"
           >
-            <div
-              className="pointer-events-none absolute -top-24 left-1/2 h-48 w-48 -translate-x-1/2 rounded-full bg-accent/20 blur-3xl"
-              aria-hidden
-            />
-            <div className="relative px-6 pb-6 pt-8 text-center">
-              <p className="text-5xl drop-shadow-[0_0_18px_rgba(255,120,40,0.55)]" aria-hidden>
-                🔥
-              </p>
-              <h2
-                id="daily-coins-title"
-                className="mt-4 text-lg font-black uppercase leading-tight tracking-[0.12em] text-foreground"
+            <div className="mx-auto mt-2 h-1 w-9 rounded-full bg-line-strong" aria-hidden />
+            <div className="flex flex-col items-center px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-6 text-center">
+              <motion.span
+                className="flex h-14 w-14 items-center justify-center rounded-full bg-accent/10 text-accent"
+                initial={{ scale: 0.6, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ type: "spring", stiffness: 420, damping: 22, delay: 0.12 }}
+                aria-hidden
               >
-                Первый день в копилке!
+                <Coins className="h-7 w-7" strokeWidth={1.75} />
+              </motion.span>
+
+              <motion.p
+                className="t-display mt-4 text-accent"
+                initial={{ y: 8, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                transition={{ duration: 0.22, ease: [0.2, 0.8, 0.2, 1], delay: 0.2 }}
+              >
+                +{bonusAmount}
+              </motion.p>
+
+              <h2 id="daily-coins-title" className="t-h2 mt-2 text-foreground">
+                Ежедневный бонус
               </h2>
-              <p className="mt-3 text-[14px] leading-relaxed text-muted">
-                Ты зашёл сегодня впервые — начисляем{" "}
-                <span className="font-bold text-accent">{bonusAmount} Жайык-Коинов</span> на баланс.
-                Серия дней подряд:{" "}
-                <span className="font-mono font-bold tabular-nums text-foreground">{streak}</span>.
+              <p className="t-body mt-1 max-w-[300px] text-muted">
+                Жайык-коины начислены на ваш баланс
               </p>
-              <button
-                type="button"
-                onClick={onClose}
-                className="neon-cyan-surface mt-8 w-full rounded-2xl bg-accent py-3.5 text-center text-xs font-black uppercase tracking-[0.2em] text-black shadow-[0_0_28px_rgba(0,240,255,0.45)] transition-[transform,filter] active:scale-[0.99] active:brightness-95"
-              >
+              <p className="t-small mt-3 tabular-nums text-muted">
+                Серия: {streak} {daysWord(streak)} подряд
+              </p>
+
+              <Button variant="primary" size="lg" fullWidth className="mt-6" onClick={onClose}>
                 Забрать
-              </button>
+              </Button>
             </div>
           </motion.div>
         </motion.div>

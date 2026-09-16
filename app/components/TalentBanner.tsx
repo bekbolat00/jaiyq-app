@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { ChevronRight, GraduationCap } from "lucide-react";
+import BrandWaves from "@/app/components/ui/BrandWaves";
 
 type Props = {
   title?: string;
@@ -6,46 +8,33 @@ type Props = {
   href?: string;
 };
 
+/** Приглашение в академию: фирменный синий блок с волнами герба. */
 export default function TalentBanner({
-  title = "ФК Жайык ищет таланты!",
+  title = "ФК Жайык ищет таланты",
   subtitle = "Открыт набор в академию",
   href = "/academy",
 }: Props) {
   return (
     <Link
       href={href}
-      className="neon-cyan-surface group relative block overflow-hidden rounded-3xl bg-gradient-to-br from-[#00f0ff] via-[#0bd3ff] to-[#0086ff] p-[1px] shadow-[0_18px_56px_-14px_rgba(0,240,255,0.65),0_0_40px_-8px_rgba(0,240,255,0.35)] transition-transform active:scale-[0.99]"
+      className="relative flex items-center gap-4 overflow-hidden rounded-2xl border border-line bg-navy p-4 transition-transform duration-150 ease-out active:scale-[0.98]"
     >
-      <div className="relative flex items-center justify-between gap-4 rounded-[23px] bg-gradient-to-br from-[#00f0ff] via-[#0bd3ff] to-[#0086ff] px-5 py-4 text-[#052026]">
-        <div className="absolute inset-y-0 right-0 w-1/2 opacity-30 mix-blend-overlay">
-          <svg viewBox="0 0 200 120" className="h-full w-full">
-            <defs>
-              <radialGradient id="tb" cx="80%" cy="30%" r="80%">
-                <stop offset="0%" stopColor="#ffffff" stopOpacity="0.5" />
-                <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
-              </radialGradient>
-            </defs>
-            <rect width="200" height="120" fill="url(#tb)" />
-          </svg>
-        </div>
+      <BrandWaves
+        className="absolute -right-8 bottom-0 h-20 w-3/5"
+        opacity={0.2}
+      />
 
-        <div className="relative flex-1">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] opacity-80">
-            Академия
-          </p>
-          <h3 className="mt-1 text-[17px] font-bold leading-tight">
-            {title}
-          </h3>
-          <p className="mt-0.5 text-[13px] opacity-90">{subtitle}</p>
-        </div>
+      <span className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-background/40 text-accent">
+        <GraduationCap className="h-5 w-5" strokeWidth={1.75} aria-hidden />
+      </span>
 
-        <div className="neon-cyan relative flex h-10 w-10 items-center justify-center rounded-full bg-[#020408] text-accent transition-transform group-hover:translate-x-0.5">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
-            <path d="M5 12h14" />
-            <path d="m13 6 6 6-6 6" />
-          </svg>
-        </div>
-      </div>
+      <span className="relative min-w-0 flex-1">
+        <span className="t-label block text-accent">Академия</span>
+        <span className="t-h3 mt-1 block text-foreground">{title}</span>
+        <span className="t-small mt-0.5 block text-muted">{subtitle}</span>
+      </span>
+
+      <ChevronRight className="relative h-5 w-5 shrink-0 text-muted" strokeWidth={1.75} aria-hidden />
     </Link>
   );
 }

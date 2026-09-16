@@ -2,6 +2,7 @@
 
 import { AnimatePresence } from "framer-motion";
 import { useEffect, useState } from "react";
+import { initTelegramWebApp } from "@/lib/telegram/webApp";
 import { SplashScreen, SPLASH_DURATION_MS } from "./SplashScreen";
 
 export default function AppShell({
@@ -9,6 +10,10 @@ export default function AppShell({
 }: Readonly<{ children: React.ReactNode }>) {
   const [appLoaded, setAppLoaded] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
+
+  useEffect(() => {
+    initTelegramWebApp();
+  }, []);
 
   useEffect(() => {
     const id = window.setTimeout(() => {

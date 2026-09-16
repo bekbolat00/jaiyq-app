@@ -1,5 +1,10 @@
 "use client";
 
+/* eslint-disable @next/next/no-img-element -- фото товаров могут отсутствовать; нужен onError с фолбэком на герб */
+
+import { useEffect, useRef, useState } from "react";
+import { motion } from "framer-motion";
+import { Plus } from "lucide-react";
 import type { Product } from "@/lib/types";
 
 type Props = {
@@ -7,75 +12,65 @@ type Props = {
   onAddToCart?: (product: Product) => void;
 };
 
+/** «24 990 ₸» — неразрывные пробелы, чтобы ₸ не уезжал на новую строку. */
+export function formatPrice(kzt: number) {
+  return `${kzt.toLocaleString("ru-RU").replace(/\s/g, " ")} ₸`;
+}
+
 export default function ProductCard({ product, onAddToCart }: Props) {
+  const [imageFailed, setImageFailed] = useState(false);
+  const imgRef = useRef<HTMLImageElement>(null);
+
+  // onError может сработать до гидратации — тогда React его не увидит.
+  useEffect(() => {
+    const img = imgRef.current;
+    if (img && img.complete && img.naturalWidth === 0) {
+      setImageFailed(true);
+    }
+  }, []);
+  const showImage = Boolean(product.imageUrl) && !imageFailed;
+
   return (
-    <article className="glass-premium flex flex-col overflow-hidden rounded-2xl">
-      <div className="relative aspect-square w-full overflow-hidden bg-gradient-to-br from-white/[0.06] to-transparent">
-        <div className="absolute inset-0 flex items-center justify-center text-white/15">
-          <ProductIcon category={product.category} />
-        </div>
-        <span className="neon-cyan absolute left-3 top-3 rounded-md border border-white/10 bg-black/50 px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-widest text-accent backdrop-blur-md">
-          {labelForCategory(product.category)}
-        </span>
+    <article className="flex flex-col">
+      <div className="relative flex aspect-square w-full items-center justify-center overflow-hidden rounded-xl bg-surface-2">
+        {showImage ? (
+          <img
+            ref={imgRef}
+            src={product.imageUrl}
+            alt={product.title}
+            className="h-full w-full object-cover"
+            onError={() => setImageFailed(true)}
+          />
+        ) : (
+          <img
+            src="/teams/zhaiyq.png"
+            alt=""
+            aria-hidden
+            className="h-[40%] w-[40%] object-contain opacity-50"
+          />
+        )}
       </div>
 
-      <div className="flex flex-1 flex-col gap-2 p-3">
-        <div className="min-h-[40px]">
-          <p className="line-clamp-2 text-[13px] font-semibold leading-tight text-foreground">
-            {product.title}
-          </p>
-          {product.subtitle && (
-            <p className="mt-0.5 text-[11px] text-muted">{product.subtitle}</p>
-          )}
-        </div>
+      <div className="mt-3 flex flex-1 flex-col">
+        <p className="t-body line-clamp-2 font-medium text-foreground">{product.title}</p>
+        {product.subtitle && <p className="t-caption mt-0.5 text-muted">{product.subtitle}</p>}
 
-        <div className="mt-auto flex items-center justify-between gap-2">
-          <span className="font-mono text-[14px] font-semibold text-foreground">
-            {product.priceKzt.toLocaleString("ru-RU")} ₸
+        <div className="mt-auto flex items-center justify-between gap-2 pt-2">
+          <span className="t-h3 whitespace-nowrap font-sans tabular-nums text-foreground">
+            {formatPrice(product.priceKzt)}
           </span>
-          <button
+          <motion.button
             type="button"
+            aria-label={`Добавить в корзину: ${product.title}`}
             onClick={() => onAddToCart?.(product)}
-            className="neon-cyan inline-flex items-center gap-1 rounded-xl border border-accent/45 bg-accent/10 px-3 py-1.5 text-[12px] font-bold text-accent transition-colors hover:bg-accent/20"
+            whileTap={{ scale: 0.9 }}
+            transition={{ duration: 0.12, ease: "easeOut" }}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-2 text-foreground transition-[filter] active:brightness-125"
           >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
-              <path d="M4 7h16l-1.2 11.2a2 2 0 0 1-2 1.8H7.2a2 2 0 0 1-2-1.8L4 7Z" />
-              <path d="M9 7a3 3 0 1 1 6 0" />
-            </svg>
-            В корзину
-          </button>
+            <Plus className="h-[18px] w-[18px]" strokeWidth={1.75} aria-hidden />
+          </motion.button>
         </div>
       </div>
     </article>
-  );
-}
-
-function labelForCategory(c: Product["category"]) {
-  if (c === "jersey") return "Jersey";
-  if (c === "merch") return "Merch";
-  return "Access.";
-}
-
-function ProductIcon({ category }: { category: Product["category"] }) {
-  if (category === "jersey") {
-    return (
-      <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-24 w-24">
-        <path d="M22 10 16 18l-6 2 2 10 6-2v26h28V28l6 2 2-10-6-2-6-8-4 4a8 8 0 0 1-12 0l-4-4Z" />
-      </svg>
-    );
-  }
-  if (category === "accessory") {
-    return (
-      <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-24 w-24">
-        <path d="M8 40c0-13 11-22 24-22s24 9 24 22v4H8v-4Z" />
-        <path d="M4 44h56" />
-      </svg>
-    );
-  }
-  return (
-    <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="1.5" className="h-24 w-24">
-      <rect x="12" y="18" width="40" height="32" rx="4" />
-      <path d="M20 18v-4h24v4" />
-    </svg>
   );
 }

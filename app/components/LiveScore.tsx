@@ -1,6 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
+import { LiveBadge } from "@/app/components/ui/Badges";
 import type { LiveGameState, LiveGoal } from "@/lib/kff/liveGame";
 
 /** Счёт и минута идущего (или только что завершившегося) матча вместо обратного отсчёта. */
@@ -9,29 +10,21 @@ export function LiveScoreCenter({ live }: { live: LiveGameState }) {
   const hasPenalties = live.homePenaltyScore != null && live.awayPenaltyScore != null;
 
   return (
-    <div className="flex shrink-0 flex-col items-center gap-1" aria-live="polite">
+    <div className="flex shrink-0 flex-col items-center gap-2" aria-live="polite">
       {isLive ? (
-        <span className="flex items-center gap-1.5 rounded-full border border-red-500/40 bg-red-500/10 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-widest text-red-400">
-          <span className="relative flex h-1.5 w-1.5">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-75" />
-            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-red-500" />
-          </span>
-          {live.clockLabel}
-        </span>
+        <LiveBadge label={live.clockLabel ?? "LIVE"} />
       ) : (
-        <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-widest text-white/60">
-          Матч завершён
-        </span>
+        <span className="t-caption rounded-lg bg-white/[0.08] px-2 py-1 text-muted">Матч завершён</span>
       )}
 
-      <div className="flex items-center gap-2 font-mono text-[32px] font-black leading-none tabular-nums text-white">
+      <div className="t-display flex items-center gap-2 text-foreground">
         <ScoreDigit value={live.homeScore} />
-        <span className="text-white/30">:</span>
+        <span className="text-subtle">:</span>
         <ScoreDigit value={live.awayScore} />
       </div>
 
       {hasPenalties && (
-        <span className="text-[10px] font-bold text-white/50">
+        <span className="t-caption text-muted">
           пен. {live.homePenaltyScore}:{live.awayPenaltyScore}
         </span>
       )}
@@ -45,10 +38,10 @@ function ScoreDigit({ value }: { value: number | null }) {
     <AnimatePresence mode="popLayout" initial={false}>
       <motion.span
         key={value ?? "-"}
-        initial={{ y: -14, opacity: 0, scale: 1.3 }}
+        initial={{ y: -14, opacity: 0, scale: 1.25 }}
         animate={{ y: 0, opacity: 1, scale: 1 }}
         exit={{ y: 14, opacity: 0 }}
-        transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+        transition={{ duration: 0.35, ease: [0.2, 0.8, 0.2, 1] }}
         className="inline-block"
       >
         {value ?? 0}
@@ -64,10 +57,10 @@ function surname(fullName: string): string {
 
 function GoalLine({ goal, align }: { goal: LiveGoal; align: "left" | "right" }) {
   return (
-    <li className={`truncate ${align === "right" ? "text-right" : "text-left"}`}>
-      <span className="font-mono text-white/50">{goal.minute}&apos;</span>{" "}
-      <span className="text-white/80">{surname(goal.playerName)}</span>
-      {goal.ownGoal && <span className="text-white/40"> (авт.)</span>}
+    <li className={`t-caption truncate ${align === "right" ? "text-right" : "text-left"}`}>
+      <span className="tabular-nums text-subtle">{goal.minute}&apos;</span>{" "}
+      <span className="text-foreground/85">{surname(goal.playerName)}</span>
+      {goal.ownGoal && <span className="text-subtle"> (авт.)</span>}
     </li>
   );
 }
@@ -78,13 +71,13 @@ export function LiveGoals({ live }: { live: LiveGameState }) {
   const home = live.goals.filter((g) => g.side === "home");
   const away = live.goals.filter((g) => g.side === "away");
   return (
-    <div className="mt-3 grid grid-cols-2 gap-3 px-2 text-[11px]">
-      <ul className="min-w-0 space-y-0.5">
+    <div className="mt-4 grid grid-cols-2 gap-4 border-t border-white/[0.08] px-1 pt-3">
+      <ul className="min-w-0 space-y-1">
         {home.map((g) => (
           <GoalLine key={g.id} goal={g} align="left" />
         ))}
       </ul>
-      <ul className="min-w-0 space-y-0.5">
+      <ul className="min-w-0 space-y-1">
         {away.map((g) => (
           <GoalLine key={g.id} goal={g} align="right" />
         ))}

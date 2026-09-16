@@ -4,20 +4,13 @@ type Props = {
   subtitle?: string;
 };
 
+/** Заголовок экрана: крупный, спокойный, обычным регистром. */
 export default function ScreenHeader({ eyebrow, title, subtitle }: Props) {
   return (
-    <header className="mb-5 mt-3">
-      {eyebrow && (
-        <p className="neon-cyan text-[11px] font-bold uppercase tracking-[0.22em] text-accent">
-          {eyebrow}
-        </p>
-      )}
-      <h1 className="mt-2 max-w-full text-balance text-[clamp(2.25rem,10.5vw,3.35rem)] font-black uppercase leading-[0.92] tracking-[0.2em] text-foreground">
-        {title}
-      </h1>
-      {subtitle && (
-        <p className="mt-1 text-[13px] text-muted">{subtitle}</p>
-      )}
+    <header className="mb-2 mt-4">
+      {eyebrow && <p className="t-label mb-1.5 text-subtle">{eyebrow}</p>}
+      <h1 className="t-h1 text-balance text-foreground">{title}</h1>
+      {subtitle && <p className="t-small mt-1 text-muted">{subtitle}</p>}
     </header>
   );
 }

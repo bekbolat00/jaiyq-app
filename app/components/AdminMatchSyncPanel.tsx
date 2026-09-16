@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { RefreshCw } from "lucide-react";
+import Button from "@/app/components/ui/Button";
+import SectionHeader from "@/app/components/ui/SectionHeader";
 import { getTelegramInitData } from "@/lib/telegram/getInitData";
 import type { SyncMatchesResult, SyncedGame } from "@/lib/kff/syncMatches";
 
@@ -73,44 +76,45 @@ export default function AdminMatchSyncPanel() {
   const changed = result?.games.filter((g) => g.action !== "unchanged") ?? [];
 
   return (
-    <section className="space-y-3">
-      <h2 className="px-1 text-[12px] font-bold uppercase tracking-widest text-muted">
-        Администратор
-      </h2>
-      <div className="glass-premium space-y-3 rounded-3xl p-4">
-        <div>
-          <p className="text-[15px] font-semibold text-foreground">Матчи с kffleague.kz</p>
-          <p className="mt-1 text-[12px] text-muted">
-            Счёт, статус и даты всех игр сезона, а для недавно сыгранных — составы и события.
-          </p>
-        </div>
+    <section>
+      <SectionHeader title="Администратор" />
+      <div className="card p-4">
+        <p className="t-h3 text-foreground">Матчи с kffleague.kz</p>
+        <p className="t-small mt-1 text-muted">
+          Счёт, статус и даты всех игр сезона, а для недавно сыгранных — составы и события.
+        </p>
 
-        <button
-          type="button"
+        <Button
+          variant="secondary"
+          size="md"
+          fullWidth
+          className="mt-4"
+          loading={phase === "running"}
+          icon={<RefreshCw className="h-[18px] w-[18px]" strokeWidth={1.75} aria-hidden />}
           onClick={runSync}
-          disabled={phase === "running"}
-          className="w-full rounded-2xl border border-accent/45 bg-accent/10 py-3 text-[13px] font-bold uppercase tracking-widest text-accent transition disabled:opacity-50"
         >
-          {phase === "running" ? "Обновляю…" : "Обновить с KFF"}
-        </button>
+          Обновить с KFF
+        </Button>
 
         {phase === "error" && error && (
-          <p className="text-[12px] text-red-400">Ошибка: {error}</p>
+          <p className="t-small mt-3 text-loss" role="alert">
+            Ошибка: {error}
+          </p>
         )}
 
         {phase === "done" && result && (
-          <div className="space-y-2 text-[12px]">
-            <p className="text-foreground/90">
+          <div className="mt-4 border-t border-line pt-3">
+            <p className="t-small text-foreground">
               {changed.length
                 ? `Изменений: ${changed.length}. Игроков в заявках: ${result.lineupsInserted}, событий: ${result.eventsInserted}.`
                 : "Всё актуально — изменений нет."}
             </p>
             {changed.length > 0 && (
-              <ul className="space-y-1">
+              <ul className="mt-2 divide-y divide-line">
                 {changed.map((g) => (
                   <li
                     key={g.kffGameId}
-                    className={g.action === "failed" ? "text-red-400" : "text-muted"}
+                    className={`t-small py-2 ${g.action === "failed" ? "text-loss" : "text-muted"}`}
                   >
                     {g.label} — {ACTION_LABEL[g.action]}
                     {g.error ? `: ${g.error}` : ""}
@@ -119,8 +123,10 @@ export default function AdminMatchSyncPanel() {
               </ul>
             )}
             {result.warnings.length > 0 && (
-              <details className="text-muted">
-                <summary className="cursor-pointer">Предупреждения ({result.warnings.length})</summary>
+              <details className="t-small mt-2 text-muted">
+                <summary className="cursor-pointer py-1">
+                  Предупреждения ({result.warnings.length})
+                </summary>
                 <ul className="mt-1 space-y-1">
                   {result.warnings.map((w) => (
                     <li key={w}>{w}</li>

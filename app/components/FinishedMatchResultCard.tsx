@@ -1,110 +1,82 @@
 "use client";
 
 import { motion } from "framer-motion";
-import TeamBadge from "@/app/components/TeamBadge";
+import { ChevronRight } from "lucide-react";
+import { ResultBadge, outcomeFor } from "@/app/components/ui/Badges";
+import Crest from "@/app/components/ui/Crest";
 import { TEAM_ZHAIYQ } from "@/lib/constants/zhaiyq";
 import type { DbMatchRow } from "@/lib/types";
-import type { Team } from "@/lib/types";
-
-function opponentTeam(row: DbMatchRow): Team {
-  const url = row.logo_url?.trim() ?? "";
-  return {
-    id: `opponent-${row.id}`,
-    shortName: row.opponent,
-    fullName: row.opponent,
-    logoUrl: url,
-  };
-}
-
-function formatResultDate(iso: string) {
-  return new Intl.DateTimeFormat("ru-RU", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  }).format(new Date(iso));
-}
-
-function displayScore(row: DbMatchRow): { left: number; right: number; leftTeam: Team; rightTeam: Team } {
-  const opp = opponentTeam(row);
-  const zh = TEAM_ZHAIYQ;
-  const zs = row.zhaiyq_score ?? 0;
-  const os = row.opponent_score ?? 0;
-  if (row.is_home) {
-    return { left: zs, right: os, leftTeam: zh, rightTeam: opp };
-  }
-  return { left: os, right: zs, leftTeam: opp, rightTeam: zh };
-}
 
 type Props = {
   row: DbMatchRow;
   index?: number;
-  /** Кнопка «О МАТЧЕ» (матч-центр). */
+  /** Открыть матч-центр. */
   onAboutMatch?: () => void;
+  /**
+   * Строка внутри общей поверхности списка (родитель рисует карточку и
+   * разделители). Без флага строка сама является карточкой.
+   */
+  grouped?: boolean;
 };
 
-export default function FinishedMatchResultCard({ row, index = 0, onAboutMatch }: Props) {
-  const { left, right, leftTeam, rightTeam } = displayScore(row);
-  const details = row.match_details?.trim();
+function shortDate(iso: string) {
+  const d = new Date(iso);
+  return {
+    day: d.getDate(),
+    month: d.toLocaleDateString("ru-RU", { month: "short" }).replace(".", ""),
+  };
+}
+
+/** Результат матча строкой: дата · соперник · счёт · В/Н/П. */
+export default function FinishedMatchResultCard({ row, index = 0, onAboutMatch, grouped = false }: Props) {
+  const { day, month } = shortDate(row.match_date);
+  const zs = row.zhaiyq_score;
+  const os = row.opponent_score;
+  const home = row.is_home ? zs : os;
+  const away = row.is_home ? os : zs;
+  const outcome = outcomeFor(zs, os);
+  const Tag = onAboutMatch ? motion.button : motion.div;
 
   return (
-    <motion.article
+    <Tag
+      type={onAboutMatch ? "button" : undefined}
       role="listitem"
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.36, ease: [0.22, 1, 0.36, 1], delay: 0.04 * index }}
       onClick={onAboutMatch}
-      onKeyDown={
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.22, ease: [0.2, 0.8, 0.2, 1], delay: 0.04 * Math.min(index, 5) }}
+      whileTap={onAboutMatch ? { backgroundColor: "rgba(150,180,255,0.06)" } : undefined}
+      aria-label={
         onAboutMatch
-          ? (e) => {
-              if (e.key !== "Enter" && e.key !== " ") return;
-              e.preventDefault();
-              onAboutMatch();
-            }
+          ? `${row.is_home ? "Жайык" : row.opponent} ${home ?? "–"}:${away ?? "–"} ${row.is_home ? row.opponent : "Жайык"}, открыть матч`
           : undefined
       }
-      tabIndex={onAboutMatch ? 0 : undefined}
-      aria-label={onAboutMatch ? `${leftTeam.shortName} — ${rightTeam.shortName}, открыть детали матча` : undefined}
-      className={`rounded-2xl border border-white/[0.07] bg-white/[0.04] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] ${
-        onAboutMatch
-          ? "cursor-pointer transition-colors hover:border-accent/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
-          : ""
-      }`}
+      className={`flex w-full items-center gap-3 px-4 py-3 text-left ${grouped ? "" : "card"}`}
     >
-      <div className="mb-1 flex flex-col gap-0.5 text-center">
-        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/45">
-          {row.competition}
-        </p>
-        <p className="text-[11px] font-semibold text-white/70">{formatResultDate(row.match_date)}</p>
+      <div className="flex w-9 shrink-0 flex-col items-center">
+        <span className="t-h3 tabular-nums text-foreground">{day}</span>
+        <span className="t-caption -mt-0.5 text-subtle">{month}</span>
       </div>
 
-      <div className="mt-4 grid grid-cols-[1fr_auto_1fr] items-center gap-2 sm:gap-3">
-        <div className="flex min-w-0 flex-col items-center gap-1.5">
-          <TeamBadge team={leftTeam} size="lg" />
-        </div>
-        <p className="shrink-0 text-2xl font-black tabular-nums tracking-tight text-accent">
-          {left} <span className="text-white/35">:</span> {right}
-        </p>
-        <div className="flex min-w-0 flex-col items-center gap-1.5">
-          <TeamBadge team={rightTeam} size="lg" />
-        </div>
+      <Crest src={row.logo_url?.trim() || null} size={36} />
+
+      <div className="min-w-0 flex-1">
+        <p className="t-body truncate font-medium text-foreground">{row.opponent}</p>
+        <p className="t-caption truncate text-muted">{row.is_home ? "Дома" : "В гостях"}</p>
       </div>
 
-      {details ? (
-        <p className="mt-3 text-center text-[10px] leading-relaxed text-white/40">{details}</p>
-      ) : null}
-
-      {onAboutMatch ? (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onAboutMatch();
-          }}
-          className="mt-3 flex w-full items-center justify-center rounded-2xl border border-white/14 bg-gradient-to-b from-white/[0.11] to-white/[0.04] py-2.5 text-center text-[11px] font-black uppercase tracking-[0.14em] text-white/90 transition-[transform,box-shadow,background-color] [box-shadow:0_0_20px_rgba(0,240,255,0.12)] hover:border-accent/30 hover:from-white/[0.16] active:scale-[0.99]"
-        >
-          О МАТЧЕ
-        </button>
-      ) : null}
-    </motion.article>
+      <div className="flex shrink-0 items-center gap-2.5">
+        <span className="t-h3 tabular-nums text-foreground">
+          {home ?? "–"}
+          <span className="px-0.5 text-subtle">:</span>
+          {away ?? "–"}
+        </span>
+        {outcome && <ResultBadge outcome={outcome} />}
+        {onAboutMatch && <ChevronRight className="-mr-1 h-4 w-4 text-subtle" strokeWidth={1.75} aria-hidden />}
+      </div>
+    </Tag>
   );
 }
+
+// Сохраняем экспорт на случай старых импортов логотипа клуба.
+export { TEAM_ZHAIYQ };

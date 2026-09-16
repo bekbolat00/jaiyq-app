@@ -10,27 +10,26 @@ type Props = {
   onLiveFinished?: () => void;
 };
 
-/** Один ближайший предстоящий матч — между баннером «Матч тура» и табами главной. */
+/** Ближайший матч — главный блок главного экрана. */
 export default function NextMatchHero({ match, loading, onExpertClick, onLiveFinished }: Props) {
   if (loading) {
     return (
-      <div className="-mx-4 px-4" aria-busy aria-label="Загрузка ближайшего матча">
-        <div className="h-[200px] animate-pulse rounded-2xl border border-white/[0.07] bg-white/[0.04]" />
-      </div>
+      <div
+        className="h-[318px] animate-pulse rounded-3xl border border-line bg-surface"
+        aria-busy
+        aria-label="Загрузка ближайшего матча"
+      />
     );
   }
 
-  if (!match) {
-    return null;
-  }
+  if (!match) return null;
 
   return (
-    <div className="-mx-4 px-4">
-      <UpcomingMatchScheduleCard
-        row={match}
-        onExpertClick={() => onExpertClick(match)}
-        onLiveFinished={onLiveFinished}
-      />
-    </div>
+    <UpcomingMatchScheduleCard
+      variant="hero"
+      row={match}
+      onExpertClick={() => onExpertClick(match)}
+      onLiveFinished={onLiveFinished}
+    />
   );
 }

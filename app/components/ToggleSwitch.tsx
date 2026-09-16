@@ -1,5 +1,8 @@
 "use client";
 
+import { motion } from "framer-motion";
+import { haptic } from "@/lib/telegram/webApp";
+
 type Props = {
   checked: boolean;
   onChange: (checked: boolean) => void;
@@ -7,54 +10,40 @@ type Props = {
   description?: string;
 };
 
-export default function ToggleSwitch({
-  checked,
-  onChange,
-  label,
-  description,
-}: Props) {
+/**
+ * Строка настройки с переключателем в стиле iOS (51×31).
+ * Без собственной рамки — кладётся в сгруппированный список `card divide-y`.
+ */
+export default function ToggleSwitch({ checked, onChange, label, description }: Props) {
   return (
-    <label className="glass-premium flex cursor-pointer items-center justify-between gap-4 rounded-2xl px-4 py-3">
-      <span className="flex-1">
-        <span className="block text-[14px] font-medium text-foreground">
-          {label}
-        </span>
+    <div className="flex min-h-14 items-center justify-between gap-4 px-4 py-3">
+      <span className="min-w-0 flex-1">
+        <span className="t-body block text-foreground">{label}</span>
         {description && (
-          <span className="mt-0.5 block text-[12px] text-muted">
-            {description}
-          </span>
+          <span className="t-caption mt-0.5 block text-muted">{description}</span>
         )}
       </span>
 
-      <span
+      <button
+        type="button"
         role="switch"
         aria-checked={checked}
-        tabIndex={0}
-        onClick={() => onChange(!checked)}
-        onKeyDown={(e) => {
-          if (e.key === " " || e.key === "Enter") {
-            e.preventDefault();
-            onChange(!checked);
-          }
+        aria-label={label}
+        onClick={() => {
+          haptic.select();
+          onChange(!checked);
         }}
-        className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full transition-colors ${
-          checked
-            ? "bg-accent/85 shadow-[0_0_14px_rgba(0,240,255,0.55),0_0_28px_rgba(0,240,255,0.28)]"
-            : "bg-white/10"
+        className={`relative h-[31px] w-[51px] shrink-0 rounded-full p-[2px] transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
+          checked ? "bg-accent" : "bg-surface-2"
         }`}
       >
-        <input
-          type="checkbox"
-          className="sr-only"
-          checked={checked}
-          onChange={(e) => onChange(e.target.checked)}
+        <motion.span
+          className="block h-[27px] w-[27px] rounded-full bg-white"
+          initial={false}
+          animate={{ x: checked ? 20 : 0 }}
+          transition={{ type: "spring", stiffness: 700, damping: 42 }}
         />
-        <span
-          className={`inline-block h-5 w-5 transform rounded-full bg-[#020408] shadow transition-transform ${
-            checked ? "translate-x-6" : "translate-x-1"
-          }`}
-        />
-      </span>
-    </label>
+      </button>
+    </div>
   );
 }

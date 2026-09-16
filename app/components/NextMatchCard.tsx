@@ -66,7 +66,7 @@ export default function NextMatchCard({ match }: Props) {
         href={match.ticketUrl ?? "#"}
         target={match.ticketUrl ? "_blank" : undefined}
         rel="noopener noreferrer"
-        className="neon-cyan accent-glow mt-5 flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-accent text-[15px] font-bold text-[#020408] transition-all hover:brightness-110 active:scale-[0.99]"
+        className="neon-cyan accent-glow mt-5 flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-accent text-[15px] font-bold text-[#050A1C] transition-all hover:brightness-110 active:scale-[0.99]"
       >
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5">
           <path d="M3 9.5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v1a2 2 0 0 0 0 4v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-1a2 2 0 0 0 0-4v-1Z" />

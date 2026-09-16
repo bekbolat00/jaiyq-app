@@ -21,6 +21,14 @@ export type RosterPlayer = {
   surname: string;
   position: string;
   photoUrl: string | null;
+  /** Из `public.players` (заполняется scripts/scrapeTeam.js); KFF уточняет при открытии карточки. */
+  heightCm: number | null;
+  weightKg: number | null;
+  /** `YYYY-MM-DD`. */
+  birthDate: string | null;
+  goals: number | null;
+  matchesPlayed: number | null;
+  minutesPlayed: number | null;
 };
 
 export type RosterGroup = {
@@ -51,6 +59,12 @@ function isZhaiyqTeamRow(row: TeamNameRow): boolean {
   return label.includes("жай") || label.includes("zhaiyq");
 }
 
+function toNumber(v: unknown): number | null {
+  if (v == null || v === "") return null;
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
 function toRosterPlayer(p: DbPlayerRow): RosterPlayer {
   const raw = p.number ?? p.jersey_number;
   const { firstName, surname } = splitDbPlayerName(p);
@@ -61,6 +75,13 @@ function toRosterPlayer(p: DbPlayerRow): RosterPlayer {
     surname,
     position: (p.position ?? "").trim(),
     photoUrl: p.photo_url?.trim() || null,
+    // В базе рост и вес лежат строками («180»), в типе — числом; берём оба.
+    heightCm: toNumber(p.height),
+    weightKg: toNumber(p.weight),
+    birthDate: p.birth_date?.trim() || null,
+    goals: p.goals ?? null,
+    matchesPlayed: p.matches_played ?? null,
+    minutesPlayed: p.minutes_played ?? null,
   };
 }
 

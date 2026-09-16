@@ -7,48 +7,44 @@ function StatRow({
   label,
   home,
   away,
+  index,
 }: {
   label: string;
   home: number;
   away: number;
+  index: number;
 }) {
-  const total = home + away || 1;
-  const homeShare = (home / total) * 100;
-  const awayShare = (away / total) * 100;
+  const total = home + away;
+  const homeShare = total > 0 ? (home / total) * 100 : 0;
+  const awayShare = total > 0 ? (away / total) * 100 : 0;
+  const transition = { duration: 0.5, ease: [0.2, 0.8, 0.2, 1] as const, delay: index * 0.04 };
 
   return (
-    <div className="space-y-2.5">
-      <p className="text-center text-[10px] font-medium uppercase tracking-widest text-white">
-        {label}
-      </p>
-      <div className="flex items-center gap-2.5">
-        <span className="w-8 shrink-0 text-right text-[13px] font-bold tabular-nums text-white/90">
-          {home}
-        </span>
-        <div className="flex min-w-0 flex-1 items-center gap-0">
-          <div className="flex h-2 flex-1 justify-end overflow-hidden rounded-l-full bg-white/[0.07]">
-            <motion.div
-              className="h-full rounded-l-full bg-white/10"
-              initial={{ width: 0 }}
-              animate={{ width: `${homeShare}%` }}
-              transition={{ duration: 0.85, ease: [0.22, 1, 0.36, 1] }}
-            />
-          </div>
-          <div className="flex h-2 flex-1 justify-start overflow-hidden rounded-r-full bg-white/[0.07]">
-            <motion.div
-              className="h-full rounded-r-full bg-accent"
-              initial={{ width: 0 }}
-              animate={{ width: `${awayShare}%` }}
-              transition={{ duration: 0.85, ease: [0.22, 1, 0.36, 1], delay: 0.04 }}
-              style={{ boxShadow: "0 0 12px rgba(0, 240, 255, 0.22)" }}
-            />
-          </div>
-        </div>
-        <span className="w-8 shrink-0 text-left text-[13px] font-bold tabular-nums text-accent">
-          {away}
-        </span>
+    <li className="px-4 py-3.5">
+      <div className="grid grid-cols-[48px_1fr_48px] items-center gap-2">
+        <span className="t-h3 tabular-nums text-foreground">{home}</span>
+        <span className="t-small text-center text-muted">{label}</span>
+        <span className="t-h3 text-right tabular-nums text-foreground">{away}</span>
       </div>
-    </div>
+      <div className="mt-2.5 flex h-1 w-full gap-1">
+        <div className="flex h-full flex-1 justify-end overflow-hidden rounded-full bg-surface-2">
+          <motion.div
+            className="h-full rounded-full bg-accent"
+            initial={{ width: 0 }}
+            animate={{ width: `${homeShare}%` }}
+            transition={transition}
+          />
+        </div>
+        <div className="flex h-full flex-1 justify-start overflow-hidden rounded-full bg-surface-2">
+          <motion.div
+            className="h-full rounded-full bg-muted/40"
+            initial={{ width: 0 }}
+            animate={{ width: `${awayShare}%` }}
+            transition={transition}
+          />
+        </div>
+      </div>
+    </li>
   );
 }
 
@@ -75,8 +71,8 @@ const DEFAULT_LABELS: Record<RowKey, string> = {
   shots: "Удары",
   shotsOnTarget: "Удары в створ",
   corners: "Угловые",
-  offsides: "Оффсайды",
-  saves: "Сэйвы",
+  offsides: "Офсайды",
+  saves: "Сейвы",
   yellowCards: "Жёлтые карточки",
 };
 
@@ -108,8 +104,8 @@ export default function MatchSpartakStats({
   labelOverrides = {},
 }: Props) {
   return (
-    <div className={`mt-6 space-y-6 ${className}`}>
-      {rows.map((key) => {
+    <ul className={`card divide-y divide-line overflow-hidden ${className}`}>
+      {rows.map((key, index) => {
         const { home, away } = pickPair(stats, key);
         return (
           <StatRow
@@ -117,9 +113,10 @@ export default function MatchSpartakStats({
             label={labelOverrides[key] ?? DEFAULT_LABELS[key]}
             home={home}
             away={away}
+            index={index}
           />
         );
       })}
-    </div>
+    </ul>
   );
 }

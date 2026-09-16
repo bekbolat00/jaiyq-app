@@ -1,16 +1,20 @@
 "use client";
 
+import { useTelegramBackButton } from "@/app/hooks/useTelegramBackButton";
 import { AnimatePresence, motion } from "framer-motion";
-import { Calendar, ChevronLeft } from "lucide-react";
+import { AlertCircle, CalendarDays, CalendarX2, ChevronLeft, Loader2, Trophy } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import CalendarGridSheet from "@/app/components/CalendarGridSheet";
 import FinishedMatchResultCard from "@/app/components/FinishedMatchResultCard";
 import UpcomingMatchScheduleCard from "@/app/components/UpcomingMatchScheduleCard";
+import EmptyState from "@/app/components/ui/EmptyState";
+import Tabs from "@/app/components/ui/Tabs";
 import type { DbMatchRow } from "@/lib/types";
 
 type Props = {
   open: boolean;
   onClose: () => void;
+  /** Больше не показывается в шапке «Матчей»; оставлено для совместимости с вызывающим кодом. */
   coins: number | null;
   loading: boolean;
   fetchError: string | null;
@@ -38,7 +42,7 @@ const listVariants = {
   animate: {
     opacity: 1,
     y: 0,
-    transition: { duration: 0.35, ease: [0.22, 1, 0.36, 1] as const },
+    transition: { duration: 0.22, ease: [0.2, 0.8, 0.2, 1] as const },
   },
   exit: {
     opacity: 0,
@@ -47,23 +51,23 @@ const listVariants = {
   },
 };
 
-function formatCoins(n: number | null): string {
-  if (n == null) return "—";
-  return n.toLocaleString("ru-RU");
-}
-
 type InnerTab = "schedule" | "results";
+
+const TABS: { id: InnerTab; label: string }[] = [
+  { id: "schedule", label: "Расписание" },
+  { id: "results", label: "Результаты" },
+];
 
 export default function MatchesSheet({
   open,
   onClose,
-  coins,
   loading,
   fetchError,
   matches,
   onExpertClick,
   onOpenMatchDetail,
 }: Props) {
+  useTelegramBackButton(open, onClose);
   const [innerTab, setInnerTab] = useState<InnerTab>("schedule");
   const [gridOpen, setGridOpen] = useState(false);
 
@@ -116,10 +120,12 @@ export default function MatchesSheet({
     <>
       <CalendarGridSheet open={gridOpen} onClose={() => setGridOpen(false)} />
 
+      {/* z-45: над нижним меню (z-40), но под шторками, которые открываются
+          отсюда, — карточка матча (50), «Эксперт» (60), билет (70). */}
       <AnimatePresence>
         {open ? (
           <motion.div
-            className="fixed inset-0 z-[95] flex flex-col bg-[#020308]"
+            className="fixed inset-0 z-[45] flex flex-col bg-background"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -134,89 +140,50 @@ export default function MatchesSheet({
               initial="hidden"
               animate="visible"
               exit="exit"
-              className="flex min-h-0 flex-1 flex-col bg-gradient-to-b from-[#060810] via-[#040508] to-[#020308] pt-[env(safe-area-inset-top)] shadow-[0_0_120px_rgba(0,0,0,0.65)]"
+              className="flex min-h-0 flex-1 flex-col bg-background pt-[env(safe-area-inset-top)]"
             >
-              <header className="flex shrink-0 items-center gap-2 border-b border-white/[0.06] px-2 py-3">
+              <header className="flex shrink-0 items-center gap-1 px-2 pb-2 pt-2">
                 <button
                   type="button"
                   onClick={handleClose}
-                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-white/90 transition-colors hover:bg-white/[0.06]"
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-foreground transition-colors active:bg-surface-2"
                   aria-label="Назад"
                 >
-                  <ChevronLeft className="h-6 w-6" strokeWidth={2} aria-hidden />
+                  <ChevronLeft className="h-6 w-6" strokeWidth={1.75} aria-hidden />
                 </button>
-                <h1
-                  id="matches-sheet-title"
-                  className="min-w-0 flex-1 text-center text-lg font-black uppercase tracking-[0.2em] text-white"
-                >
-                  МАТЧИ
+                <h1 id="matches-sheet-title" className="t-h1 min-w-0 flex-1 truncate text-foreground">
+                  Матчи
                 </h1>
-                <div className="flex shrink-0 items-center gap-2">
-                  <div
-                    className="flex items-center gap-1 rounded-2xl border border-white/[0.08] bg-white/[0.06] px-2.5 py-1.5"
-                    title="Жайык-Коины"
-                  >
-                    <span className="text-[12px] font-black tabular-nums text-white/95">
-                      {formatCoins(coins)}
-                    </span>
-                    <span className="select-none text-[14px] leading-none" aria-hidden>
-                      🪙
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setGridOpen(true)}
-                    className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/[0.08] bg-white/[0.04] text-accent transition-colors hover:bg-white/[0.07]"
-                    aria-label="Календарь"
-                  >
-                    <Calendar className="h-5 w-5" strokeWidth={2} aria-hidden />
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setGridOpen(true)}
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-accent transition-colors active:bg-accent/[0.08]"
+                  aria-label="Календарь"
+                >
+                  <CalendarDays className="h-5 w-5" strokeWidth={1.75} aria-hidden />
+                </button>
               </header>
 
-              <div className="flex shrink-0 gap-2 px-3 pb-3 pt-2">
-                <motion.button
-                  type="button"
-                  layout
-                  onClick={() => setInnerTab("schedule")}
-                  whileTap={{ scale: 0.98 }}
-                  transition={{ type: "spring", stiffness: 420, damping: 32 }}
-                  className={`min-h-[44px] flex-1 rounded-2xl py-2.5 text-center text-[10px] font-black uppercase tracking-[0.14em] transition-[color,background,box-shadow] sm:text-[11px] ${
-                    innerTab === "schedule"
-                      ? "bg-accent text-[#020308] shadow-[0_0_22px_rgba(0,240,255,0.28)]"
-                      : "bg-white/[0.06] text-white/45 hover:text-white/70"
-                  }`}
-                >
-                  РАСПИСАНИЕ
-                </motion.button>
-                <motion.button
-                  type="button"
-                  layout
-                  onClick={() => setInnerTab("results")}
-                  whileTap={{ scale: 0.98 }}
-                  transition={{ type: "spring", stiffness: 420, damping: 32 }}
-                  className={`min-h-[44px] flex-1 rounded-2xl py-2.5 text-center text-[10px] font-black uppercase tracking-[0.14em] transition-[color,background,box-shadow] sm:text-[11px] ${
-                    innerTab === "results"
-                      ? "bg-accent text-[#020308] shadow-[0_0_22px_rgba(0,240,255,0.28)]"
-                      : "bg-white/[0.06] text-white/45 hover:text-white/70"
-                  }`}
-                >
-                  РЕЗУЛЬТАТЫ
-                </motion.button>
-              </div>
+              <Tabs
+                layoutId="matches-sheet-tabs"
+                value={innerTab}
+                onChange={setInnerTab}
+                tabs={TABS}
+                className="mx-4 shrink-0"
+              />
 
-              <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+              <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-4">
                 {loading ? (
-                  <div className="flex min-h-[200px] flex-col items-center justify-center gap-4 py-12">
-                    <div className="h-10 w-10 animate-spin rounded-full border-2 border-accent/30 border-t-accent" />
-                    <p className="text-center text-xs font-bold uppercase tracking-widest text-white/45">
-                      Загрузка матчей…
-                    </p>
+                  <div className="flex min-h-[240px] flex-col items-center justify-center gap-3">
+                    <Loader2 className="h-6 w-6 animate-spin text-muted" strokeWidth={1.75} aria-hidden />
+                    <p className="t-small text-muted">Загружаем матчи</p>
                   </div>
                 ) : fetchError ? (
-                  <p className="rounded-2xl border border-dashed border-rose-500/30 bg-rose-500/5 py-10 text-center text-sm text-rose-200/90">
-                    {fetchError}
-                  </p>
+                  <EmptyState
+                    icon={<AlertCircle className="h-6 w-6" strokeWidth={1.75} />}
+                    title="Не удалось загрузить матчи"
+                    description={fetchError}
+                  />
                 ) : (
                   <AnimatePresence mode="wait">
                     <motion.div
@@ -230,13 +197,11 @@ export default function MatchesSheet({
                     >
                       {innerTab === "schedule" ? (
                         scheduleRows.length === 0 ? (
-                          <motion.p
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            className="rounded-2xl border border-dashed border-white/12 bg-white/[0.02] py-10 text-center text-sm text-white/40"
-                          >
-                            {listEmptyMessage}
-                          </motion.p>
+                          <EmptyState
+                            icon={<CalendarX2 className="h-6 w-6" strokeWidth={1.75} />}
+                            title={listEmptyMessage}
+                            description="Расписание обновится, как только лига опубликует новые туры"
+                          />
                         ) : (
                           scheduleRows.map((row, i) => (
                             <UpcomingMatchScheduleCard
@@ -248,13 +213,11 @@ export default function MatchesSheet({
                           ))
                         )
                       ) : finishedRows.length === 0 ? (
-                        <motion.p
-                          initial={{ opacity: 0 }}
-                          animate={{ opacity: 1 }}
-                          className="rounded-2xl border border-dashed border-white/12 bg-white/[0.02] py-10 text-center text-sm text-white/40"
-                        >
-                          {listEmptyMessage}
-                        </motion.p>
+                        <EmptyState
+                          icon={<Trophy className="h-6 w-6" strokeWidth={1.75} />}
+                          title={listEmptyMessage}
+                          description="Результаты появятся после первого сыгранного матча"
+                        />
                       ) : (
                         finishedRows.map((row, i) => (
                           <FinishedMatchResultCard

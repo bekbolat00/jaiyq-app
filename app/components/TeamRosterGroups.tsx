@@ -1,11 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { CircleAlert, Users } from "lucide-react";
+import EmptyState from "@/app/components/ui/EmptyState";
 import RosterPlayerCard from "@/app/components/RosterPlayerCard";
-import { fetchZhaiyqRosterGroups, type RosterGroup } from "@/lib/team/fetchTeamRoster";
+import { fetchZhaiyqRosterGroups, type RosterGroup, type RosterPlayer } from "@/lib/team/fetchTeamRoster";
 import { isSupabaseConfigured } from "@/lib/supabaseClient";
 
-export default function TeamRosterGroups() {
+type Props = {
+  onSelect?: (player: RosterPlayer) => void;
+};
+
+export default function TeamRosterGroups({ onSelect }: Props) {
   const configured = isSupabaseConfigured();
   const [loading, setLoading] = useState(configured);
   const [error, setError] = useState<string | null>(
@@ -29,42 +35,50 @@ export default function TeamRosterGroups() {
 
   if (loading) {
     return (
-      <p className="py-12 text-center text-[12px] font-bold uppercase tracking-widest text-white/35">
-        Загружаем состав…
-      </p>
+      <div aria-busy className="flex flex-col gap-3">
+        <span className="sr-only">Загружаем состав…</span>
+        <div className="h-[26px] w-32 rounded-lg bg-surface" aria-hidden />
+        <div className="grid grid-cols-2 gap-3" aria-hidden>
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="mt-6 aspect-[4/5] rounded-2xl border border-line bg-surface" />
+          ))}
+        </div>
+      </div>
     );
   }
 
   if (error && groups.length === 0) {
     return (
-      <p className="py-12 text-center text-[13px] text-rose-300/90">{error}</p>
+      <EmptyState
+        icon={<CircleAlert className="h-6 w-6" strokeWidth={1.75} aria-hidden />}
+        title="Не удалось загрузить состав"
+        description={error}
+      />
     );
   }
 
   if (groups.length === 0) {
     return (
-      <p className="py-12 text-center text-[13px] text-white/40">
-        Состав пока не заполнен
-      </p>
+      <EmptyState
+        icon={<Users className="h-6 w-6" strokeWidth={1.75} aria-hidden />}
+        title="Состав пока не заполнен"
+      />
     );
   }
 
   return (
     <div className="flex flex-col gap-8">
       {groups.map((group) => (
-        <section key={group.id}>
-          <div className="mb-3 flex items-center gap-3">
-            <h2 className="neon-cyan shrink-0 text-[11px] font-bold uppercase tracking-[0.22em] text-accent">
+        <section key={group.id} aria-labelledby={`roster-${group.id}`}>
+          <div className="mb-3 flex items-baseline gap-2">
+            <h2 id={`roster-${group.id}`} className="t-h2 text-foreground">
               {group.label}
             </h2>
-            <span className="h-px flex-1 bg-white/10" aria-hidden />
-            <span className="shrink-0 font-mono text-[11px] text-white/30">
-              {group.players.length}
-            </span>
+            <span className="t-small tabular-nums text-subtle">{group.players.length}</span>
           </div>
-          <div className="grid grid-cols-2 gap-x-3 gap-y-12">
+          <div className="grid grid-cols-2 gap-3">
             {group.players.map((p) => (
-              <RosterPlayerCard key={p.id} player={p} />
+              <RosterPlayerCard key={p.id} player={p} onClick={onSelect} />
             ))}
           </div>
         </section>

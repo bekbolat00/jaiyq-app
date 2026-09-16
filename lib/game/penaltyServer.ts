@@ -1,6 +1,6 @@
-import { randomInt } from "node:crypto";
+import { createHash, randomInt } from "node:crypto";
 import { fanDisplayName } from "@/lib/fans/scoring";
-import { simulateShot, type ShotInput, type ShotOutcome } from "@/lib/game/penalty";
+import { freeKickSpotFromSeed, simulateShot, type GameMode, type KickSpot, type ShotInput, type ShotOutcome } from "@/lib/game/penalty";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export const ATTEMPTS_PER_DAY = 3;
@@ -15,8 +15,16 @@ const secureRandom = () => randomInt(0, 2 ** 32) / 2 ** 32;
 
 type ShotRow = { attempt: number; result: ShotOutcome["result"]; points: number; coins: number; top_corner: boolean };
 
+/** Точка штрафного для конкретной попытки — одинаковая при показе и при ударе. */
+export function freeKickSpotFor(telegramId: number, date: string, attempt: number): KickSpot {
+  const digest = createHash("sha256").update(`${telegramId}:${date}:${attempt}:freekick`).digest();
+  return freeKickSpotFromSeed(digest.readUInt32BE(0));
+}
+
 export type PenaltyStatus = {
   attemptsLeft: number;
+  /** Где будет стоять мяч, если следующая попытка — штрафной. */
+  nextFreeKick: KickSpot | null;
   today: { attempt: number; result: ShotOutcome["result"]; points: number; topCorner: boolean }[];
   totalPoints: number;
   totalGoals: number;
@@ -25,7 +33,8 @@ export type PenaltyStatus = {
 export class MissingTableError extends Error {}
 
 function isMissingTable(err: { code?: string } | null) {
-  return err?.code === "42P01" || err?.code === "PGRST205";
+  // Нет таблицы или колонки `mode` (миграция штрафного не применена).
+  return ["42P01", "PGRST205", "42703", "PGRST204"].includes(err?.code ?? "");
 }
 
 export async function getPenaltyStatus(telegramId: number): Promise<PenaltyStatus> {
@@ -44,8 +53,10 @@ export async function getPenaltyStatus(telegramId: number): Promise<PenaltyStatu
   if (totals.error) throw new Error(totals.error.message);
 
   const rows = (today.data ?? []) as ShotRow[];
+  const attemptsLeft = Math.max(0, ATTEMPTS_PER_DAY - rows.length);
   return {
-    attemptsLeft: Math.max(0, ATTEMPTS_PER_DAY - rows.length),
+    attemptsLeft,
+    nextFreeKick: attemptsLeft > 0 ? freeKickSpotFor(telegramId, playDate(), rows.length + 1) : null,
     today: rows.map((r) => ({ attempt: r.attempt, result: r.result, points: r.points, topCorner: r.top_corner })),
     totalPoints: (totals.data ?? []).reduce((s, r) => s + (r.points ?? 0), 0),
     totalGoals: (totals.data ?? []).filter((r) => r.result === "goal").length,
@@ -71,18 +82,20 @@ async function creditCoins(telegramId: number, amount: number): Promise<number |
   return null;
 }
 
-export async function takeShot(telegramId: number, input: ShotInput): Promise<ShootResponse> {
+export async function takeShot(telegramId: number, input: ShotInput, mode: GameMode = "penalty"): Promise<ShootResponse> {
   const admin = getSupabaseAdminClient();
   const status = await getPenaltyStatus(telegramId);
   if (status.attemptsLeft <= 0) return { ok: false, reason: "no-attempts" };
 
-  const outcome = simulateShot(input, secureRandom);
   const attempt = ATTEMPTS_PER_DAY - status.attemptsLeft + 1;
+  const spot = mode === "freekick" ? freeKickSpotFor(telegramId, playDate(), attempt) : undefined;
+  const outcome = simulateShot(input, secureRandom, mode, spot);
 
   const { error } = await admin.from("penalty_shots").insert({
     telegram_id: telegramId,
     play_date: playDate(),
     attempt,
+    mode,
     aim_x: input.aimX,
     aim_y: input.aimY,
     power: input.power,

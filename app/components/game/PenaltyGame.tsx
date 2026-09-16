@@ -10,7 +10,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { PenaltySceneHandle } from "@/app/components/game/PenaltyScene";
 import Button from "@/app/components/ui/Button";
 import { useTelegramBackButton } from "@/app/hooks/useTelegramBackButton";
-import { simulateShot, type ShotInput, type ShotOutcome, type ShotResult } from "@/lib/game/penalty";
+import { freeKickSpotFromSeed, PENALTY_SPOT, simulateShot, type GameMode, type KickSpot, type ShotInput, type ShotOutcome, type ShotResult } from "@/lib/game/penalty";
+import type { ScorerCandidate } from "@/lib/kff/scorers";
 import { getTelegramInitData } from "@/lib/telegram/getInitData";
 import { haptic } from "@/lib/telegram/webApp";
 
@@ -23,7 +24,7 @@ type Phase = "intro" | "aim" | "shooting" | "result" | "summary";
 
 type TodayShot = { attempt: number; result: ShotResult; points: number; topCorner: boolean };
 
-type Status = { attemptsLeft: number; today: TodayShot[]; totalPoints: number; totalGoals: number };
+type Status = { attemptsLeft: number; nextFreeKick: KickSpot | null; today: TodayShot[]; totalPoints: number; totalGoals: number };
 
 type ScorerRow = { place: number; name: string; photoUrl: string | null; points: number; goals: number; isMe: boolean };
 
@@ -32,7 +33,14 @@ const RESULT_COPY: Record<ShotResult, { title: string; tone: string }> = {
   saved: { title: "СЕЙВ", tone: "text-foreground" },
   post: { title: "ШТАНГА", tone: "text-draw" },
   miss: { title: "МИМО", tone: "text-muted" },
+  wall: { title: "В СТЕНКУ", tone: "text-foreground" },
 };
+
+const MODE_LABEL: Record<GameMode, string> = { penalty: "Пенальти", freekick: "Штрафной" };
+
+function randomSpot(): KickSpot {
+  return freeKickSpotFromSeed(Math.floor(Math.random() * 2 ** 31));
+}
 
 function plural(n: number, one: string, few: string, many: string) {
   const m10 = n % 10;
@@ -80,6 +88,10 @@ export default function PenaltyGame() {
   const [phase, setPhase] = useState<Phase>("intro");
   const [status, setStatus] = useState<Status | null>(null);
   const [practice, setPractice] = useState(false);
+  const [mode, setMode] = useState<GameMode>("penalty");
+  const [practiceSpot, setPracticeSpot] = useState<KickSpot>(() => PENALTY_SPOT);
+  const [shooters, setShooters] = useState<ScorerCandidate[]>([]);
+  const [shooterId, setShooterId] = useState<string | null>(null);
   const [last, setLast] = useState<{ outcome: ShotOutcome; coins: number | null } | null>(null);
   const [leaders, setLeaders] = useState<{ top: ScorerRow[]; me: ScorerRow | null } | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -114,7 +126,18 @@ export default function PenaltyGame() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadStatus();
     void loadLeaders();
+    fetch("/api/players/scorers")
+      .then((r) => (r.ok ? r.json() : { players: [] }))
+      .then((d: { players: ScorerCandidate[] }) => {
+        setShooters(d.players);
+        setShooterId((id) => id ?? d.players[0]?.id ?? null);
+      })
+      .catch(() => {});
   }, [loadStatus, loadLeaders]);
+
+  const shooter = shooters.find((p) => p.id === shooterId) ?? null;
+  const spot: KickSpot =
+    mode === "freekick" ? (practice ? practiceSpot : (status?.nextFreeKick ?? practiceSpot)) : PENALTY_SPOT;
 
   const attemptsLeft = status?.attemptsLeft ?? 0;
   const canPlayForPoints = inTelegram && status != null && attemptsLeft > 0;
@@ -122,6 +145,7 @@ export default function PenaltyGame() {
   const start = (asPractice: boolean) => {
     haptic.impact("light");
     setPractice(asPractice);
+    if (mode === "freekick") setPracticeSpot(randomSpot());
     scene.current?.reset();
     setLast(null);
     setPhase("aim");
@@ -130,17 +154,17 @@ export default function PenaltyGame() {
   const shoot = async (input: ShotInput) => {
     setPhase("shooting");
     haptic.impact("medium");
+    // Разбег начинается сразу: пока игрок бежит к мячу, сервер успевает посчитать удар.
     scene.current?.windUp();
-    const startedAt = performance.now();
 
     let outcome: ShotOutcome;
     let coins: number | null = null;
     if (practice) {
-      outcome = simulateShot(input, Math.random);
+      outcome = simulateShot(input, Math.random, mode, spot);
     } else {
       const res = await postJson<{ outcome: ShotOutcome; attemptsLeft: number; coins: number | null; totalPoints: number }>(
         "/api/game/penalty/shoot",
-        { initData: getTelegramInitData(), input },
+        { initData: getTelegramInitData(), input, mode },
       );
       if (!res.data) {
         setNotice(
@@ -167,17 +191,13 @@ export default function PenaltyGame() {
       );
     }
 
-    // Минимальный «замах», чтобы удар не выглядел мгновенным при быстром ответе сервера.
-    const wait = Math.max(0, 260 - (performance.now() - startedAt));
-    window.setTimeout(() => {
-      scene.current?.play(outcome, () => {
-        setLast({ outcome, coins });
-        setPhase("result");
-        if (outcome.result === "goal") haptic.notify("success");
-        else if (outcome.result === "post") haptic.notify("warning");
-        else haptic.notify("error");
-      });
-    }, wait);
+    scene.current?.play(outcome, () => {
+      setLast({ outcome, coins });
+      setPhase("result");
+      if (outcome.result === "goal") haptic.notify("success");
+      else if (outcome.result === "post") haptic.notify("warning");
+      else haptic.notify("error");
+    });
   };
 
   const onPointerDown = (e: React.PointerEvent) => {
@@ -202,6 +222,7 @@ export default function PenaltyGame() {
   };
 
   const next = () => {
+    if (practice && mode === "freekick") setPracticeSpot(randomSpot());
     scene.current?.reset();
     setLast(null);
     if (!practice && (status?.attemptsLeft ?? 0) <= 0) {
@@ -224,7 +245,12 @@ export default function PenaltyGame() {
       onPointerCancel={onPointerUp}
     >
       <div className="absolute inset-0">
-        <PenaltyScene ref={scene} />
+        <PenaltyScene
+          ref={scene}
+          mode={mode}
+          spot={spot}
+          shooter={{ surname: shooter?.surname ?? "Жайык", number: shooter?.number && shooter.number !== "—" ? shooter.number : "10" }}
+        />
       </div>
 
       {/* Верхняя панель: закрыть, режим, попытки. */}
@@ -240,7 +266,7 @@ export default function PenaltyGame() {
         {phase !== "intro" && (
           <div className="flex items-center gap-2 rounded-full bg-background/60 px-3 py-1.5 backdrop-blur">
             {practice ? (
-              <span className="t-caption text-muted">Тренировка</span>
+              <span className="t-caption text-muted">Тренировка · {MODE_LABEL[mode]}</span>
             ) : (
               <>
                 {Array.from({ length: 3 }).map((_, i) => {
@@ -360,7 +386,10 @@ export default function PenaltyGame() {
 
               {phase === "intro" ? (
                 <p className="t-small mt-2 text-muted">
-                  3 пенальти в день. Гол — 1 очко и 5 монет, в девятку — 2 очка и 10 монет. Вратарь сильный: бей точно в угол.
+                  3 удара в день.{" "}
+                  {mode === "penalty"
+                    ? "Пенальти: гол — 1 очко и 5 монет, в девятку — 2 очка и 10 монет."
+                    : "Штрафной: гол — 2 очка и 10 монет, в девятку — 3 очка и 15 монет. Перебрось стенку или обведи её закруткой."}
                 </p>
               ) : (
                 <p className="t-small mt-2 text-muted">
@@ -371,16 +400,70 @@ export default function PenaltyGame() {
               {notice && <p className="t-small mt-3 rounded-xl bg-surface-2 px-3 py-2 text-foreground/90">{notice}</p>}
 
               {phase === "intro" && (
-                <div className="mt-5 flex gap-2">
-                  <span className="t-small rounded-lg bg-foreground px-3 py-2 font-medium text-background">Пенальти</span>
-                  <span className="t-small rounded-lg bg-surface-2 px-3 py-2 text-subtle">Штрафной · скоро</span>
-                </div>
+                <>
+                  <div className="mt-5 flex gap-2" role="radiogroup" aria-label="Режим">
+                    {(["penalty", "freekick"] as const).map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        role="radio"
+                        aria-checked={mode === m}
+                        onClick={() => {
+                          if (mode !== m) haptic.select();
+                          setMode(m);
+                          if (m === "freekick") setPracticeSpot(randomSpot());
+                        }}
+                        className={`t-small rounded-lg px-3 py-2 font-medium transition-colors ${
+                          mode === m ? "bg-foreground text-background" : "bg-surface-2 text-muted"
+                        }`}
+                      >
+                        {MODE_LABEL[m]}
+                      </button>
+                    ))}
+                  </div>
+
+                  {shooters.length > 0 && (
+                    <div className="mt-5">
+                      <p className="t-label mb-2 text-subtle">Кто бьёт</p>
+                      <div className="hide-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4 pb-1" role="radiogroup" aria-label="Кто бьёт">
+                        {shooters.slice(0, 10).map((p) => {
+                          const sel = p.id === shooterId;
+                          return (
+                            <button
+                              key={p.id}
+                              type="button"
+                              role="radio"
+                              aria-checked={sel}
+                              onClick={() => {
+                                if (!sel) haptic.select();
+                                setShooterId(p.id);
+                              }}
+                              className={`flex w-[72px] shrink-0 flex-col items-center gap-1 rounded-xl py-2 transition-colors ${
+                                sel ? "bg-accent/12 ring-2 ring-inset ring-accent" : "bg-surface-2"
+                              }`}
+                            >
+                              <span className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full bg-navy/60 text-[13px] font-semibold text-accent/80">
+                                {p.photoUrl ? (
+                                  <img src={p.photoUrl} alt="" className="h-full w-full object-cover object-top" />
+                                ) : (
+                                  `${p.surname.charAt(0)}${p.firstName.charAt(0)}`.toUpperCase()
+                                )}
+                              </span>
+                              <span className="t-caption w-full truncate px-1 text-center text-foreground">{p.surname}</span>
+                              <span className="t-caption -mt-1 tabular-nums text-subtle">№ {p.number}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
 
               <div className="mt-5 flex flex-col gap-2">
                 {canPlayForPoints && phase === "intro" ? (
                   <Button fullWidth onClick={() => start(false)}>
-                    Бить пенальти · {attemptsLeft} из 3
+                    {mode === "penalty" ? "Бить пенальти" : "Бить штрафной"} · {attemptsLeft} из 3
                   </Button>
                 ) : (
                   <Button fullWidth variant={phase === "intro" ? "primary" : "secondary"} onClick={() => start(true)}>

@@ -26,7 +26,8 @@ export async function POST(request: Request) {
   if (!input) return NextResponse.json({ error: "invalid shot" }, { status: 400 });
 
   try {
-    const res = await takeShot(user.id, input);
+    const mode = body.mode === "freekick" ? "freekick" : "penalty";
+    const res = await takeShot(user.id, input, mode);
     if (!res.ok) {
       return NextResponse.json(
         { error: res.reason },

@@ -56,5 +56,15 @@ export function useAppMatches(): UseAppMatchesResult {
     void refetch();
   }, [refetch]);
 
+  // Telegram держит мини-аппку в памяти: без этого болельщик, свернувший
+  // приложение до финального свистка, увидит старый счёт при возврате.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void refetch();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [refetch]);
+
   return { loading, error, upcomingMatches, pastMatches, refetch };
 }

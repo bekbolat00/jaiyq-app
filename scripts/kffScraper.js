@@ -742,7 +742,7 @@ async function main() {
   const json = JSON.stringify(data, null, 2);
 
   if (outPath) {
-    const resolved = path.resolve(process.cwd(), outPath);
+    const resolved = path.resolve(/*turbopackIgnore: true*/ process.cwd(), outPath);
     fs.writeFileSync(resolved, json, "utf8");
     console.error(`Сохранено: ${resolved}`);
   } else {

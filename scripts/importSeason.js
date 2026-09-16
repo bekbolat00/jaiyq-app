@@ -106,6 +106,18 @@ async function fetchSeasonGames(teamId, seasonId) {
   return { seasonId: season, games: res.data.items ?? [] };
 }
 
+/**
+ * Турниры команды на KFF (лига, кубок, прошлые сезоны) — каждый из них
+ * отдельный «сезон» со своим списком игр.
+ */
+async function fetchTeamSeasons(teamId) {
+  const res = await axios.get(`${API_BASE}/teams/${teamId}/seasons?lang=ru`, {
+    headers: { "User-Agent": USER_AGENT, Accept: "application/json" },
+    timeout: 20000,
+  });
+  return res.data.items ?? [];
+}
+
 // ---------------------------------------------------------------------------
 
 class Importer {
@@ -300,11 +312,19 @@ class Importer {
    * «Академия Онтустик»), и сравнение по имени наплодило бы дубликаты
    * матчей. Для одной команды пара (дата, дома/в гостях) уникальна.
    */
-  findMatchRow(dateIso, opponentName, isHome, wantStatus) {
+  findMatchRow(dateIso, opponentName, isHome, wantStatus, kffGameId) {
+    // Если строка уже помечена id игры KFF — это самое надёжное совпадение:
+    // оно переживает перенос матча на другой день.
+    if (kffGameId != null) {
+      const byKffId = this.matches.find((m) => m.kff_game_id === kffGameId);
+      if (byKffId) return byKffId;
+    }
     const candidates = this.matches.filter(
       (m) =>
         String(m.match_date ?? "").slice(0, 10) === dateIso &&
-        Boolean(m.is_home) === isHome,
+        Boolean(m.is_home) === isHome &&
+        // Строка, уже привязанная к другой игре KFF, — не наш матч.
+        (m.kff_game_id == null || m.kff_game_id === kffGameId),
     );
     if (!candidates.length) return null;
     // В базе рядом с реальными матчами лежат устаревшие мок-строки со
@@ -320,9 +340,17 @@ class Importer {
     const status = game.status === "finished" ? "finished" : "upcoming";
     const matchDate = `${dateIso}T${game.time ?? "00:00"}:00`;
 
-    const existing = this.findMatchRow(dateIso, opponent.name, isHome, status);
+    const withKffId = await this.supportsKffGameId();
+    const existing = this.findMatchRow(dateIso, opponent.name, isHome, status, game.id);
     if (existing) {
       const patch = {};
+      if (withKffId && existing.kff_game_id !== game.id) patch.kff_game_id = game.id;
+      // Перенос или уточнение времени: KFF часто сначала ставит игру без
+      // времени и объявляет его позже. Сравниваем до минут, чтобы не
+      // спотыкаться о секунды/часовой пояс в ответе Postgres.
+      if (String(existing.match_date ?? "").slice(0, 16) !== matchDate.slice(0, 16)) {
+        patch.match_date = matchDate;
+      }
       // Приводим название соперника к каноническому (как на KFF): матч-центр
       // связывает `matches.opponent` с `teams.name` по имени, а в БД лежат
       // расхождения вроде «Batyr»/«Шахтер», из-за которых состав гостей
@@ -360,6 +388,7 @@ class Importer {
       competition: this.competition,
       status,
       match_details: null,
+      ...(withKffId ? { kff_game_id: game.id } : {}),
     };
     this.summary.matchesCreated.push(`${dateIso} ${opponent.name} (${status})`);
     if (this.dryRun) {
@@ -375,6 +404,24 @@ class Importer {
     if (error) throw new Error(`matches insert: ${error.message}`);
     this.matches.push(data);
     return data;
+  }
+
+  /**
+   * Есть ли в `matches` колонка `kff_game_id` (миграция 20260916120000).
+   * Без неё матч сопоставляется только по дате и стороне.
+   */
+  async supportsKffGameId() {
+    if (this._kffGameId === undefined) {
+      const { error } = await this.sb.from("matches").select("kff_game_id").limit(1);
+      this._kffGameId = !error;
+      if (error) {
+        this.summary.warnings.push(
+          "В `matches` нет колонки kff_game_id — примените миграцию " +
+            "20260916120000, иначе перенесённые KFF матчи задвоятся.",
+        );
+      }
+    }
+    return this._kffGameId;
   }
 
   /**
@@ -670,4 +717,11 @@ if (require.main === module) {
   });
 }
 
-module.exports = { Importer, fetchSeasonGames };
+module.exports = {
+  Importer,
+  fetchSeasonGames,
+  fetchTeamSeasons,
+  ZHAIYQ_KFF_TEAM_ID,
+  COMPETITION_LABEL,
+  REQUEST_DELAY_MS,
+};

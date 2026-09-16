@@ -12,6 +12,7 @@ import {
 import ScreenHeader from "../components/ScreenHeader";
 import TabEnterMotion from "../components/TabEnterMotion";
 import MyTicketsSection from "../components/MyTicketsSection";
+import AdminMatchSyncPanel from "../components/AdminMatchSyncPanel";
 import NotificationBellButton from "../components/NotificationBellButton";
 import NotificationsSheet from "../components/NotificationsSheet";
 import AvatarUploadSheet, {
@@ -397,6 +398,8 @@ export default function ProfilePage() {
 
         <MyTicketsSection />
       </section>
+
+      <AdminMatchSyncPanel />
       </TabEnterMotion>
 
       <NotificationsSheet

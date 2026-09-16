@@ -20,6 +20,7 @@ async function callSettings(initData: string, enabled?: boolean): Promise<boolea
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(enabled === undefined ? { initData } : { initData, enabled }),
   });
+  if (res.status === 503) throw new Error("not-configured");
   if (!res.ok) throw new Error(String(res.status));
   return ((await res.json()) as { enabled: boolean }).enabled;
 }
@@ -74,8 +75,12 @@ export function useMatchNotifications(): MatchNotificationsState {
       }
       setEnabledState(await callSettings(initData, next));
       haptic.notify(next ? "success" : "warning");
-    } catch {
-      setError("Не удалось сохранить. Попробуйте ещё раз.");
+    } catch (e) {
+      setError(
+        e instanceof Error && e.message === "not-configured"
+          ? "Уведомления скоро заработают — клуб завершает настройку."
+          : "Не удалось сохранить. Попробуйте ещё раз.",
+      );
       haptic.notify("error");
     } finally {
       setBusy(false);

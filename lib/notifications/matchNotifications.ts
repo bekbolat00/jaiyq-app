@@ -124,7 +124,7 @@ export async function buildPrematch(m: MatchRow, nowMs: number): Promise<Planned
 
   const buttons: InlineButton[][] = [];
   if (watch) buttons.push([{ text: "▶️ Смотреть онлайн", url: watch }]);
-  buttons.push([{ text: "🎯 Сделать прогноз", web_app: { url: appUrl() } }]);
+  buttons.push([{ text: "🎯 Угадай счёт", web_app: { url: appUrl() } }]);
 
   return { matchId: m.id, kind: "prematch", title: matchTitle(m), html, buttons };
 }

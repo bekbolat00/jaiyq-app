@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { QRCodeSVG } from "qrcode.react";
-import { CircleCheck, Clock, Ticket } from "lucide-react";
+import { ChevronDown, CircleCheck, Clock, Ticket } from "lucide-react";
+import { haptic } from "@/lib/telegram/webApp";
 import EmptyState from "@/app/components/ui/EmptyState";
 import { getTelegramInitData } from "@/lib/telegram/getInitData";
 import type { MyTicket } from "@/lib/types";
@@ -203,11 +204,80 @@ export default function MyTicketsSection() {
     );
   }
 
+  return <TicketsDisclosure tickets={tickets} />;
+}
+
+function plural(n: number, one: string, few: string, many: string) {
+  const m10 = n % 10;
+  const m100 = n % 100;
+  if (m10 === 1 && m100 !== 11) return one;
+  if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return few;
+  return many;
+}
+
+/**
+ * Билеты свёрнуты в одну строку: сколько активных и ближайший матч.
+ * Полные карточки с QR раскрываются по нажатию — профиль не превращается
+ * в длинную ленту билетов.
+ */
+function TicketsDisclosure({ tickets }: { tickets: MyTicket[] }) {
+  const [open, setOpen] = useState(false);
+
+  // Сначала то, что пригодится на входе: оплаченные, потом ждущие оплаты, потом использованные.
+  const order: Record<MyTicket["status"], number> = { paid: 0, pending: 1, used: 2 };
+  const sorted = [...tickets].sort(
+    (a, b) => order[a.status] - order[b.status] || a.matchDate.localeCompare(b.matchDate),
+  );
+  const active = sorted.filter((t) => t.status !== "used");
+  const next = active[0] ?? null;
+
+  const summary = active.length
+    ? `${active.length} ${plural(active.length, "активный билет", "активных билета", "активных билетов")}`
+    : `${tickets.length} ${plural(tickets.length, "билет", "билета", "билетов")} в архиве`;
+
   return (
-    <div className="flex flex-col gap-3">
-      {tickets.map((t, i) => (
-        <TicketCard key={t.id} ticket={t} index={i} />
-      ))}
+    <div className="card overflow-hidden">
+      <button
+        type="button"
+        onClick={() => {
+          haptic.select();
+          setOpen((v) => !v);
+        }}
+        aria-expanded={open}
+        className="flex w-full items-center gap-3 px-4 py-3.5 text-left active:bg-surface-2"
+      >
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent/12 text-accent">
+          <Ticket className="h-5 w-5" strokeWidth={1.75} aria-hidden />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="t-body block font-medium text-foreground">{summary}</span>
+          <span className="t-caption block truncate text-muted">
+            {next ? `Ближайший: ${matchTitle(next)} · ${formatDate(next.matchDate)}` : "Нажмите, чтобы посмотреть"}
+          </span>
+        </span>
+        <motion.span animate={{ rotate: open ? 180 : 0 }} transition={{ duration: 0.2 }} className="text-subtle">
+          <ChevronDown className="h-5 w-5" strokeWidth={1.75} aria-hidden />
+        </motion.span>
+      </button>
+
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            key="tickets"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.25, ease: [0.2, 0.8, 0.2, 1] }}
+            className="overflow-hidden"
+          >
+            <div className="flex flex-col gap-3 border-t border-line p-3">
+              {sorted.map((t, i) => (
+                <TicketCard key={t.id} ticket={t} index={i} />
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

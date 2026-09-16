@@ -101,7 +101,7 @@ export default function UpcomingMatchScheduleCard({
 
         <div className="mt-4 flex gap-2">
           <Button variant="secondary" size="sm" icon={<Target className="h-4 w-4" strokeWidth={1.75} />} onClick={onExpertClick} className="flex-1">
-            Прогноз
+            Угадай счёт
           </Button>
           {row.is_home && (
             <Button variant="secondary" size="sm" icon={<Ticket className="h-4 w-4" strokeWidth={1.75} />} onClick={() => setTicketModalOpen(true)} className="flex-1">
@@ -181,10 +181,10 @@ export default function UpcomingMatchScheduleCard({
                 variant="secondary"
                 className="shrink-0 bg-white/[0.08] px-4 hover:bg-white/[0.12]"
                 onClick={onExpertClick}
-                aria-label="Сделать прогноз"
+                aria-label="Угадай счёт"
                 icon={<Target className="h-[18px] w-[18px]" strokeWidth={1.75} />}
               >
-                Прогноз
+                Угадай счёт
               </Button>
             </>
           ) : (
@@ -193,7 +193,7 @@ export default function UpcomingMatchScheduleCard({
               icon={<Target className="h-[18px] w-[18px]" strokeWidth={1.75} />}
               onClick={onExpertClick}
             >
-              Сделать прогноз
+              Угадай счёт
               <ChevronRight className="-mr-1 h-4 w-4 opacity-60" strokeWidth={2} aria-hidden />
             </Button>
           )}

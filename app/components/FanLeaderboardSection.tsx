@@ -180,7 +180,7 @@ export default function FanLeaderboardSection() {
             description="Очки начисляются после матчей, на которые болельщики сделали прогноз"
             action={
               <Button size="sm" onClick={goPredict}>
-                Сделать прогноз
+                Угадай счёт
               </Button>
             }
           />
@@ -271,9 +271,9 @@ function MyPlaceCard({ me, ahead }: { me: Row; ahead: Payload["ahead"] }) {
 function JoinCard({ onPredict }: { onPredict: () => void }) {
   return (
     <div className="card flex items-center justify-between gap-3 p-4">
-      <p className="t-small text-muted">Сделай прогноз на ближайший матч, чтобы попасть в рейтинг</p>
+      <p className="t-small text-muted">Угадай счёт ближайшего матча, чтобы попасть в рейтинг</p>
       <Button variant="secondary" size="sm" className="shrink-0" onClick={onPredict}>
-        Сделать прогноз
+        Угадай счёт
       </Button>
     </div>
   );

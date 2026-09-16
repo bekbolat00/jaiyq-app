@@ -37,7 +37,9 @@ export async function POST(request: Request) {
       .maybeSingle();
     if (error) {
       console.error("[api/notifications/settings] update failed", error);
-      return NextResponse.json({ error: "update failed" }, { status: 500 });
+      // 42703 — нет колонки users.notify_matches: миграция 20260917120000 не применена.
+      const status = error.code === "42703" ? 503 : 500;
+      return NextResponse.json({ error: status === 503 ? "not configured" : "update failed" }, { status });
     }
     if (!data) return NextResponse.json({ error: "user not synced yet" }, { status: 409 });
     return NextResponse.json({ enabled: Boolean(data.notify_matches) });

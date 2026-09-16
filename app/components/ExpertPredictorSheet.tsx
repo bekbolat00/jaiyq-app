@@ -2,13 +2,14 @@
 
 import { haptic } from "@/lib/telegram/webApp";
 import { useTelegramBackButton } from "@/app/hooks/useTelegramBackButton";
-import Image from "next/image";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Check, CheckCircle2, ChevronLeft, Loader2, Minus, Plus, X } from "lucide-react";
 import Button from "@/app/components/ui/Button";
 import Crest from "@/app/components/ui/Crest";
 import { PLAYERS } from "@/lib/data/mock";
+import { fetchZhaiyqRosterGroups, type RosterPlayer } from "@/lib/team/fetchTeamRoster";
+import { displayCase } from "@/lib/text/displayCase";
 import { TEAM_ZHAIYQ } from "@/lib/constants/zhaiyq";
 import { isSupabaseConfigured, supabase } from "@/lib/supabaseClient";
 import { getTelegramInitData } from "@/lib/telegram/getInitData";
@@ -45,14 +46,27 @@ function getPredictionUserId(): string {
   return "guest";
 }
 
-function playerLabelFromId(id: string | null | undefined): string {
-  if (!id) return "—";
-  const p = PLAYERS.find((x) => x.id === id);
-  if (!p) return "—";
-  return `${p.firstName} ${p.lastName.charAt(0)}.`;
+/** Кто может забить первым: полевые игроки, сначала нападающие. Вратарей и тренеров не показываем. */
+const SCORER_ORDER = ["нп", "пз", "зщ"] as const;
+
+let rosterCache: RosterPlayer[] | null = null;
+
+async function loadScorerCandidates(): Promise<RosterPlayer[]> {
+  if (rosterCache) return rosterCache;
+  const { groups } = await fetchZhaiyqRosterGroups();
+  const byId = new Map(groups.map((g) => [g.id, g.players]));
+  rosterCache = SCORER_ORDER.flatMap((id) => byId.get(id) ?? []);
+  return rosterCache;
 }
 
-const EXPERT_PLAYERS = PLAYERS.filter((p) => p.squad === "main").slice(0, 4);
+function playerLabelFromId(id: string | null | undefined, roster: RosterPlayer[] = []): string {
+  if (!id) return "—";
+  const real = roster.find((x) => x.id === id);
+  if (real) return displayCase(real.surname);
+  // Старые прогнозы сохраняли id игроков из демо-данных.
+  const demo = PLAYERS.find((x) => x.id === id);
+  return demo ? `${demo.firstName} ${demo.lastName.charAt(0)}.` : "—";
+}
 
 const SCORE_MAX = 20;
 const TOTAL_STEPS = 4;
@@ -250,6 +264,18 @@ export default function ExpertPredictorSheet({
   const [homeScore, setHomeScore] = useState(0);
   const [awayScore, setAwayScore] = useState(0);
   const [playerId, setPlayerId] = useState<string | null>(null);
+  const [roster, setRoster] = useState<RosterPlayer[]>(rosterCache ?? []);
+
+  useEffect(() => {
+    if (!open || roster.length) return;
+    let cancelled = false;
+    void loadScorerCandidates().then((list) => {
+      if (!cancelled) setRoster(list);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, roster.length]);
   const [firstGoalMinute, setFirstGoalMinute] = useState(45);
   const [shots, setShots] = useState(5);
   const [submitting, setSubmitting] = useState(false);
@@ -465,7 +491,7 @@ export default function ExpertPredictorSheet({
                 <span />
               )}
               <h2 id="expert-predictor-title" className="t-h3 text-center text-foreground">
-                Прогноз на матч
+                Угадай счёт
               </h2>
               <button
                 type="button"
@@ -495,7 +521,7 @@ export default function ExpertPredictorSheet({
                   <p className="t-h2 mt-4 text-foreground">Прогноз принят</p>
                   <p className="t-small mt-1.5 text-muted tabular-nums">
                     {teamLabel(matchHome)} {homeScore}:{awayScore} {teamLabel(matchAway)} · первый
-                    гол — {playerLabelFromId(playerId)}, {firstGoalMinute}′
+                    гол — {playerLabelFromId(playerId, roster)}, {firstGoalMinute}′
                   </p>
                 </motion.div>
               ) : showChecking ? (
@@ -538,7 +564,7 @@ export default function ExpertPredictorSheet({
                     <div className="flex min-h-12 items-center justify-between gap-3">
                       <dt className="t-small text-muted">Первый гол</dt>
                       <dd className="t-body font-medium text-foreground">
-                        {playerLabelFromId(existingPrediction.first_goal_player ?? undefined)}
+                        {playerLabelFromId(existingPrediction.first_goal_player ?? undefined, roster)}
                       </dd>
                     </div>
                     <div className="flex min-h-12 items-center justify-between gap-3">
@@ -647,47 +673,69 @@ export default function ExpertPredictorSheet({
                           className="flex flex-col"
                         >
                           <p className="t-body text-center text-muted">Кто забьёт первым за Жайык?</p>
-                          <div className="mt-5 grid grid-cols-2 gap-3" role="radiogroup">
-                            {EXPERT_PLAYERS.map((p) => {
-                              const sel = playerId === p.id;
-                              const label = `${p.firstName} ${p.lastName.charAt(0)}.`;
-                              return (
-                                <motion.button
-                                  key={p.id}
-                                  type="button"
-                                  role="radio"
-                                  aria-checked={sel}
-                                  onClick={() => {
-                                    if (!sel) haptic.select();
-                                    setPlayerId(p.id);
-                                  }}
-                                  whileTap={{ scale: 0.97 }}
-                                  transition={{ duration: 0.12, ease: "easeOut" }}
-                                  className={`relative flex flex-col overflow-hidden rounded-xl bg-surface-2 text-left ring-inset transition-shadow duration-150 ${
-                                    sel ? "ring-2 ring-accent" : "ring-1 ring-line"
-                                  }`}
-                                >
-                                  <div className="relative aspect-[4/3] w-full">
-                                    <Image
-                                      src={p.photoUrl}
-                                      alt=""
-                                      fill
-                                      sizes="(max-width: 512px) 50vw, 240px"
-                                      className="object-contain object-bottom"
-                                    />
-                                    {sel && (
-                                      <span className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-accent text-on-accent">
-                                        <Check className="h-4 w-4" strokeWidth={2} aria-hidden />
-                                      </span>
-                                    )}
-                                  </div>
-                                  <span className="t-small line-clamp-1 px-3 py-2.5 font-medium text-foreground">
-                                    {label}
-                                  </span>
-                                </motion.button>
-                              );
-                            })}
-                          </div>
+                          {roster.length === 0 ? (
+                            <div className="mt-5 grid grid-cols-3 gap-2" aria-busy>
+                              {Array.from({ length: 6 }).map((_, i) => (
+                                <div key={i} className="aspect-[3/4] animate-pulse rounded-xl bg-surface-2" />
+                              ))}
+                            </div>
+                          ) : (
+                            <div
+                              className="mt-5 grid max-h-[46dvh] grid-cols-3 gap-2 overflow-y-auto overscroll-contain pb-1"
+                              role="radiogroup"
+                              aria-label="Кто забьёт первым"
+                            >
+                              {roster.map((p) => {
+                                const sel = playerId === p.id;
+                                return (
+                                  <motion.button
+                                    key={p.id}
+                                    type="button"
+                                    role="radio"
+                                    aria-checked={sel}
+                                    onClick={() => {
+                                      if (!sel) haptic.select();
+                                      setPlayerId(p.id);
+                                    }}
+                                    whileTap={{ scale: 0.97 }}
+                                    transition={{ duration: 0.12, ease: "easeOut" }}
+                                    className={`relative flex flex-col overflow-hidden rounded-xl bg-surface-2 text-left ring-inset transition-shadow duration-150 ${
+                                      sel ? "ring-2 ring-accent" : "ring-1 ring-line"
+                                    }`}
+                                  >
+                                    <div className="relative aspect-square w-full bg-gradient-to-b from-navy/50 to-transparent">
+                                      {p.photoUrl ? (
+                                        // eslint-disable-next-line @next/next/no-img-element -- вырезки игроков с kffleague.kz
+                                        <img
+                                          src={p.photoUrl}
+                                          alt=""
+                                          loading="lazy"
+                                          className="absolute inset-x-0 bottom-0 mx-auto h-full w-auto object-contain object-bottom"
+                                        />
+                                      ) : (
+                                        <span className="absolute inset-0 flex items-center justify-center text-[22px] font-semibold text-accent/70">
+                                          {`${p.surname.charAt(0)}${p.firstName.charAt(0)}`.toUpperCase()}
+                                        </span>
+                                      )}
+                                      {p.number !== "—" && (
+                                        <span className="t-caption absolute left-1.5 top-1.5 rounded-md bg-background/70 px-1.5 tabular-nums text-foreground">
+                                          {p.number}
+                                        </span>
+                                      )}
+                                      {sel && (
+                                        <span className="absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-accent text-on-accent">
+                                          <Check className="h-3.5 w-3.5" strokeWidth={2.5} aria-hidden />
+                                        </span>
+                                      )}
+                                    </div>
+                                    <span className="t-caption line-clamp-1 px-2 py-2 font-medium text-foreground">
+                                      {displayCase(p.surname)}
+                                    </span>
+                                  </motion.button>
+                                );
+                              })}
+                            </div>
+                          )}
                         </motion.div>
                       )}
 

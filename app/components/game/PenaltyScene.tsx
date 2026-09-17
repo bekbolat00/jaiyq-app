@@ -1,6 +1,6 @@
 "use client";
 
-import { PerspectiveCamera } from "@react-three/drei";
+import { Line, PerspectiveCamera } from "@react-three/drei";
 import { Canvas, useFrame, useLoader, useThree } from "@react-three/fiber";
 import { forwardRef, Suspense, useEffect, useImperativeHandle, useMemo, useRef } from "react";
 import {
@@ -14,13 +14,20 @@ import {
   LoopOnce,
   Material,
   Mesh,
+  MeshBasicMaterial,
   MeshPhysicalMaterial,
   MeshStandardMaterial,
+  Object3D,
+  Plane,
   PlaneGeometry,
+  Quaternion,
+  Raycaster,
   RepeatWrapping,
   SRGBColorSpace,
+  Vector2,
   Vector3,
 } from "three";
+import type { Line2, LineSegments2 } from "three-stdlib";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js";
 import {
@@ -29,14 +36,34 @@ import {
   GOAL_HEIGHT,
   PENALTY_SPOT,
   ballPosition,
+  flightProgress,
+  flightTimeAt,
+  previewPath,
   wallFor,
   type GameMode,
   type KickSpot,
+  type ShotInput,
   type ShotOutcome,
 } from "@/lib/game/penalty";
+import { playKickSound } from "@/lib/game/sfx";
 
-/** Реальный полёт мяча длится 0.35–0.7 с — замедляем, чтобы было видно, что произошло. */
-export const SLOW_MO = 1.7;
+/**
+ * Реальный полёт мяча 0.33–1.2 с — повтор замедлен, чтобы было видно, что произошло.
+ * Сильный удар замедляем меньше: он должен ощущаться резким. Вратарь — тем же множителем.
+ */
+const slowMoFor = (pace: number) => 1.9 - 0.55 * pace;
+/** Какая часть траектории видна пунктиром при прицеливании. */
+const AIM_PREVIEW_FRACTION = 0.7;
+const AIM_LINE_INITIAL: [number, number, number][] = [
+  [0, 0, 0],
+  [0, 0, 0.01],
+];
+/** Плоскость линии ворот — на неё проецируется палец при прицеливании. */
+const GOAL_PLANE = new Plane(new Vector3(0, 0, 1), 0);
+/** Толчок камеры в момент удара, мс. */
+const SHAKE_MS = 170;
+/** Полупрозрачные «следы» мяча в полёте. */
+const TRAIL_COUNT = 7;
 const NET_DEPTH = 2;
 const CAMERA_TARGET = new Vector3(0, 1.25, 0);
 /** Сколько метров поперёк должно помещаться на линии ворот: ворота 7.3 м + поля. */
@@ -54,6 +81,10 @@ export type PenaltySceneHandle = {
   /** Проиграть удар по исходу с сервера. Колбэк — когда мяч «остановился». */
   play: (outcome: ShotOutcome, onDone: () => void) => void;
   reset: () => void;
+  /** Пунктир прицела во время свайпа; null — спрятать. */
+  setAimPreview: (input: ShotInput | null) => void;
+  /** Точка на плоскости ворот под пальцем, в метрах (x — поперёк, y — высота). */
+  goalPointAt: (clientX: number, clientY: number) => { x: number; y: number } | null;
 };
 
 // ─── Текстуры, нарисованные на лету (без загрузки файлов) ────────────────────
@@ -450,7 +481,8 @@ function afterPoint(o: ShotOutcome): Vector3 {
 /** 3D-модель игрока Жайыка из Meshy (Умбетов, №8) со скелетом Mixamo и анимациями. */
 const SHOOTER_MODEL_URL = "/models/players/umetov/umetov-final.glb";
 const CLIP_IDLE = "Idle_9";
-const CLIP_RUN = "Run_03";
+/** Running, а не Run_03: Run_03 задирает ключицы на 31–54° и сутулит корпус. */
+const CLIP_RUN = "Running";
 const CLIP_KICK = "Kick_a_Soccer_Ball";
 
 /*
@@ -491,6 +523,21 @@ function matteUmetovMaterial(source: Material): Material {
   if (m instanceof MeshPhysicalMaterial) m.specularColor.setRGB(1, 1, 1);
   m.needsUpdate = true;
   return m;
+}
+
+/**
+ * Риг Meshy: ключицы влияют на всю верхнюю часть груди и спины, а клипы Mixamo
+ * поворачивают их на 20–50° от позы привязки — плечи выходят квадратными.
+ * После анимации возвращаем ключицы к позе привязки на эту долю; 0 — как в клипах.
+ * Настоящее исправление — перевесить риг в Blender.
+ */
+const CLAVICLE_RETURN = 0.55;
+const CLAVICLE_BONES = ["mixamorigLeftShoulder", "mixamorigRightShoulder"];
+
+type Clavicle = { bone: Object3D; rest: Quaternion };
+
+function relaxClavicles(clavicles: Clavicle[]) {
+  for (const c of clavicles) c.bone.quaternion.slerp(c.rest, CLAVICLE_RETURN);
 }
 
 type ShooterPhase = "idle" | "run" | "kick" | "recover";
@@ -543,7 +590,12 @@ function ShooterModel({ timeline, from, to, yaw }: {
     kick.clampWhenFinished = true;
     // Время удара ведём вручную — чтобы касание совпало с вылетом мяча.
     kick.timeScale = 0;
-    return { mixer, idle: action(CLIP_IDLE), run: action(CLIP_RUN), kick };
+    // Поза привязки ключиц — до первого кадра анимации.
+    const clavicles = CLAVICLE_BONES.flatMap((name) => {
+      const bone = model.getObjectByName(name);
+      return bone ? [{ bone, rest: bone.quaternion.clone() }] : [];
+    });
+    return { mixer, idle: action(CLIP_IDLE), run: action(CLIP_RUN), kick, clavicles };
   }, [gltf, model]);
 
   useEffect(() => {
@@ -575,6 +627,7 @@ function ShooterModel({ timeline, from, to, yaw }: {
       }
       g.position.copy(from);
       mixer.update(delta);
+      relaxClavicles(rig.clavicles);
       return;
     }
 
@@ -597,6 +650,7 @@ function ShooterModel({ timeline, from, to, yaw }: {
       }
     }
     mixer.update(delta);
+    relaxClavicles(rig.clavicles);
   });
 
   return (
@@ -606,9 +660,14 @@ function ShooterModel({ timeline, from, to, yaw }: {
   );
 }
 
-type SceneProps = { mode: GameMode; spot: KickSpot };
+type SceneProps = {
+  mode: GameMode;
+  spot: KickSpot;
+  /** Нога коснулась мяча: `pace` 0..1 — сила удара. Для вибрации. */
+  onKickContact?: (pace: number) => void;
+};
 
-function SceneContent({ handleRef, mode, spot }: SceneProps & { handleRef: React.Ref<PenaltySceneHandle> }) {
+function SceneContent({ handleRef, mode, spot, onKickContact }: SceneProps & { handleRef: React.Ref<PenaltySceneHandle> }) {
   const ball = useRef<Mesh>(null);
   const keeper = useRef<Group>(null);
   const arms = useRef<Group>(null);
@@ -616,6 +675,12 @@ function SceneContent({ handleRef, mode, spot }: SceneProps & { handleRef: React
   const wall = useRef<Group>(null);
   const timeline = useRef<Timeline | null>(null);
   const netBase = useRef<Float32Array | null>(null);
+  const aim = useRef<{ input: ShotInput | null; dirty: boolean }>({ input: null, dirty: false });
+  const aimLine = useRef<Line2 | LineSegments2>(null);
+  const trail = useRef<(Mesh | null)[]>([]);
+  const trailHistory = useRef<Vector3[]>([]);
+  const shakeFrom = useRef<number | null>(null);
+  const getState = useThree((s) => s.get);
 
   const origin = mode === "freekick" ? spot : PENALTY_SPOT;
   const { f, r, yaw } = useMemo(() => frameFor(origin), [origin]);
@@ -637,6 +702,9 @@ function SceneContent({ handleRef, mode, spot }: SceneProps & { handleRef: React
   const fov = Math.min(72, Math.max(38, (2 * Math.atan(VISIBLE_HALF_WIDTH / aspect / camDist) * 180) / Math.PI));
 
   const resetPose = () => {
+    shakeFrom.current = null;
+    trailHistory.current = [];
+    for (const m of trail.current) if (m) m.visible = false;
     ball.current?.position.set(origin.x, BALL_RADIUS, origin.z);
     ball.current?.rotation.set(0, 0, 0);
     keeper.current?.position.set(keeperHome, 0, 0.35);
@@ -661,7 +729,20 @@ function SceneContent({ handleRef, mode, spot }: SceneProps & { handleRef: React
     },
     reset() {
       timeline.current = null;
+      aim.current = { input: null, dirty: true };
       resetPose();
+    },
+    setAimPreview(input) {
+      aim.current = { input, dirty: true };
+    },
+    goalPointAt(clientX, clientY) {
+      const { camera, gl } = getState();
+      const rect = gl.domElement.getBoundingClientRect();
+      const ndc = new Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
+      const ray = new Raycaster();
+      ray.setFromCamera(ndc, camera);
+      const hit = ray.ray.intersectPlane(GOAL_PLANE, new Vector3());
+      return hit ? { x: hit.x, y: hit.y } : null;
     },
   }));
 
@@ -678,6 +759,19 @@ function SceneContent({ handleRef, mode, spot }: SceneProps & { handleRef: React
 
     const tl = timeline.current;
 
+    // Пунктир прицела: пересчитываем, только когда палец сдвинулся.
+    const line = aimLine.current;
+    if (line) {
+      const a = aim.current;
+      line.visible = !tl && a.input != null;
+      if (a.dirty && a.input) {
+        const pts = previewPath(a.input, mode, origin, AIM_PREVIEW_FRACTION);
+        line.geometry.setPositions(pts.flatMap((p) => [p.x, p.y, p.z]));
+        line.computeLineDistances();
+      }
+      a.dirty = false;
+    }
+
     if (!tl) {
       // Ожидание: вратарь пружинит на ногах.
       k.position.x = keeperHome + Math.sin(t * 1.4) * 0.25;
@@ -688,21 +782,40 @@ function SceneContent({ handleRef, mode, spot }: SceneProps & { handleRef: React
 
     // Удар по мячу — через ту же паузу, что занимал разбег, чтобы темп игры не менялся.
     const since = now - tl.runStart;
-    if (tl.outcome != null && tl.flightStart == null && since >= CONTACT_MS) tl.flightStart = now;
+    if (tl.outcome != null && tl.flightStart == null && since >= CONTACT_MS) {
+      tl.flightStart = now;
+      shakeFrom.current = now;
+      playKickSound(tl.outcome.ball.pace);
+      onKickContact?.(tl.outcome.ball.pace);
+    }
 
     const o = tl.outcome;
     if (!o || tl.flightStart == null) return;
     const elapsed = now - tl.flightStart;
-    const flight = o.ball.flightMs * SLOW_MO;
+    const pace = o.ball.pace;
+    const slowMo = slowMoFor(pace);
+    const flight = o.ball.flightMs * slowMo;
+
+    // Толчок камеры в момент касания: чем сильнее удар, тем резче.
+    if (shakeFrom.current != null) {
+      const e = (now - shakeFrom.current) / SHAKE_MS;
+      if (e < 1) {
+        const amp = (0.02 + 0.06 * pace) * (1 - e) * (1 - e);
+        cam.position.x += Math.sin(now * 0.09) * amp;
+        cam.position.y += Math.cos(now * 0.113) * amp * 0.7;
+        cam.position.addScaledVector(f, amp * 0.8);
+      }
+    }
 
     // Стенка прыгает сразу после удара.
     if (wall.current) wall.current.position.y = Math.max(0, Math.sin(clamp01(elapsed / 520) * Math.PI) * 0.35);
 
     // Мяч: полёт; при попадании в стенку — отскок назад от неё.
+    // Путь по времени идёт с «рывком»: быстрее всего сразу после касания.
     const wallT = o.wall ? (o.origin.z - o.wall.z) / o.origin.z : 1;
-    const flightEnd = o.result === "wall" ? flight * wallT : flight;
+    const flightEnd = o.result === "wall" ? flight * flightTimeAt(wallT, pace) : flight;
     if (elapsed <= flightEnd) {
-      const p = ballPosition(o, elapsed / flight);
+      const p = ballPosition(o, flightProgress(elapsed / flight, pace));
       b.position.set(p.x, p.y, p.z);
     } else {
       const u = clamp01((elapsed - flightEnd) / 550);
@@ -718,8 +831,25 @@ function SceneContent({ handleRef, mode, spot }: SceneProps & { handleRef: React
     b.rotation.x -= 0.35;
     b.rotation.z += o.ball.curveM * 0.08;
 
+    // Шлейф: мяч в прошлых кадрах, пока летит к воротам.
+    const flying = elapsed <= flightEnd + 120;
+    const history = trailHistory.current;
+    // Точку добавляем, только когда мяч сдвинулся: при просадке FPS шлейф не слипается.
+    if (flying && (!history[0] || history[0].distanceToSquared(b.position) > 0.04)) {
+      history.unshift(b.position.clone());
+      if (history.length > TRAIL_COUNT * 2 + 1) history.length = TRAIL_COUNT * 2 + 1;
+    }
+    trail.current.forEach((m, i) => {
+      if (!m) return;
+      const at = history[(i + 1) * 2];
+      m.visible = flying && at != null;
+      if (!m.visible) return;
+      m.position.copy(at);
+      (m.material as MeshBasicMaterial).opacity = (0.3 - i * 0.038) * (0.45 + 0.55 * pace);
+    });
+
     // Вратарь: стартует в startMs и долетает до точки рук за diveMs.
-    const d = easeOut(clamp01((elapsed - o.keeper.startMs * SLOW_MO) / (o.keeper.diveMs * SLOW_MO)));
+    const d = easeOut(clamp01((elapsed - o.keeper.startMs * slowMo) / (o.keeper.diveMs * slowMo)));
     const rel = o.keeper.handX - o.keeper.startX;
     const lean = Math.max(-1.35, Math.min(1.35, -rel * 0.45));
     k.position.x = o.keeper.startX + rel * 0.72 * d;
@@ -728,13 +858,13 @@ function SceneContent({ handleRef, mode, spot }: SceneProps & { handleRef: React
     k.rotation.z = lean * d;
     if (arms.current) arms.current.rotation.z = lean * 0.4 * d;
 
-    // Сетка прогибается там, куда прилетел мяч.
+    // Сетка прогибается там, куда прилетел мяч, и пару раз пружинит обратно.
     if (o.result === "goal" && elapsed > flight && net.current) {
       const geo = net.current.geometry as PlaneGeometry;
       const arr = geo.attributes.position.array as Float32Array;
       if (!netBase.current) netBase.current = new Float32Array(arr);
-      const u = clamp01((elapsed - flight) / 700);
-      const strength = Math.sin(Math.PI * u) * 0.9;
+      const u = clamp01((elapsed - flight) / 900);
+      const strength = (0.6 + 0.7 * pace) * Math.exp(-3 * u) * Math.sin(Math.PI * 3 * u);
       for (let i = 0; i < arr.length; i += 3) {
         const vx = netBase.current[i];
         const vy = netBase.current[i + 1] + GOAL_HEIGHT / 2;
@@ -767,6 +897,30 @@ function SceneContent({ handleRef, mode, spot }: SceneProps & { handleRef: React
         <ShooterModel timeline={timeline} from={runFrom} to={runTo} yaw={yaw} />
       </Suspense>
       <Ball ballRef={ball} spot={origin} />
+      {Array.from({ length: TRAIL_COUNT }, (_, i) => (
+        <mesh
+          key={i}
+          ref={(m) => {
+            trail.current[i] = m;
+          }}
+          visible={false}
+        >
+          <sphereGeometry args={[BALL_RADIUS * (0.92 - i * 0.08), 12, 12]} />
+          <meshBasicMaterial color="#e6fbff" transparent opacity={0.3} depthWrite={false} />
+        </mesh>
+      ))}
+      <Line
+        ref={aimLine}
+        points={AIM_LINE_INITIAL}
+        color="#00e8f0"
+        lineWidth={3}
+        dashed
+        dashSize={0.32}
+        gapSize={0.22}
+        transparent
+        opacity={0.9}
+        depthTest={false}
+      />
     </>
   );
 }

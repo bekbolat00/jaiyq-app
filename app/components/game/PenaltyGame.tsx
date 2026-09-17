@@ -8,9 +8,23 @@ import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { PenaltySceneHandle } from "@/app/components/game/PenaltyScene";
+import PowerMeter, { powerAt } from "@/app/components/game/PowerMeter";
 import Button from "@/app/components/ui/Button";
 import { useTelegramBackButton } from "@/app/hooks/useTelegramBackButton";
-import { freeKickSpotFromSeed, PENALTY_SPOT, simulateShot, type GameMode, type KickSpot, type ShotInput, type ShotOutcome, type ShotResult } from "@/lib/game/penalty";
+import {
+  freeKickSpotFromSeed,
+  GOAL_HALF_WIDTH,
+  GOAL_HEIGHT,
+  PENALTY_SPOT,
+  POWER_SWEET_MAX,
+  POWER_SWEET_MIN,
+  simulateShot,
+  type GameMode,
+  type KickSpot,
+  type ShotInput,
+  type ShotOutcome,
+  type ShotResult,
+} from "@/lib/game/penalty";
 import type { ScorerCandidate } from "@/lib/kff/scorers";
 import { getTelegramInitData } from "@/lib/telegram/getInitData";
 import { haptic } from "@/lib/telegram/webApp";
@@ -20,7 +34,8 @@ const PenaltyScene = dynamic(() => import("@/app/components/game/PenaltyScene"),
   loading: () => <div className="absolute inset-0 bg-background" />,
 });
 
-type Phase = "intro" | "aim" | "shooting" | "result" | "summary";
+/** power — держим палец и набираем силу, aim — ведём траекторию, shooting — удар. */
+type Phase = "intro" | "power" | "aim" | "shooting" | "result" | "summary";
 
 type TodayShot = { attempt: number; result: ShotResult; points: number; topCorner: boolean };
 
@@ -55,30 +70,44 @@ async function postJson<T>(url: string, body: unknown): Promise<{ status: number
   return { status: res.status, data: res.ok ? ((await res.json()) as T) : null };
 }
 
+type SwipePoint = { x: number; y: number; t: number };
+
+/** Короче — это случайное касание, а не набор силы. */
+const MIN_CHARGE_MS = 80;
+
 /**
- * Свайп → параметры удара. Горизонталь — прицел по ширине ворот, вертикаль —
- * высота, скорость — сила, отклонение середины траектории от прямой — закрутка.
+ * Свайп прицела → параметры удара. Конец свайпа проецируется на плоскость ворот:
+ * куда отпустил палец, туда (без разброса) прилетит мяч. Изгиб траектории пальца —
+ * закрутка; сила уже зафиксирована шкалой.
  */
-function swipeToInput(points: { x: number; y: number; t: number }[], w: number, h: number): ShotInput | null {
+function swipeToAim(
+  points: SwipePoint[],
+  power: number,
+  mode: GameMode,
+  goalPointAt: PenaltySceneHandle["goalPointAt"],
+): ShotInput | null {
   if (points.length < 2) return null;
   const a = points[0];
   const b = points[points.length - 1];
   const dx = b.x - a.x;
   const dy = b.y - a.y;
-  if (dy > -40) return null; // удар — это свайп вверх, к воротам
+  if (dy > -30) return null; // удар — это движение вверх, к воротам
   const dist = Math.hypot(dx, dy);
-  const ms = Math.max(16, b.t - a.t);
-  const speed = dist / ms; // px/мс
+  const target = goalPointAt(b.x, b.y);
+  if (!target) return null;
 
   const mid = points[Math.floor(points.length / 2)];
   // Знаковое расстояние середины свайпа от прямой начало→конец.
   const cross = ((b.x - a.x) * (mid.y - a.y) - (b.y - a.y) * (mid.x - a.x)) / Math.max(1, dist);
+  const curve = Math.max(-1, Math.min(1, -cross / (dist * 0.18)));
+  // Закрутка сносит мяч вбок (см. shotPlan) — прицел компенсирует снос, чтобы мяч пришёл под палец.
+  const drift = curve * (mode === "freekick" ? 2.3 : 1.1) * 0.35;
 
   return {
-    aimX: Math.max(-1.6, Math.min(1.6, dx / (w * 0.36))),
-    aimY: Math.max(0, Math.min(1.6, (-dy - h * 0.14) / (h * 0.3))),
-    power: Math.max(0.05, Math.min(1, (speed - 0.5) / 2.2)),
-    curve: Math.max(-1, Math.min(1, -cross / (dist * 0.18))),
+    aimX: Math.max(-1.6, Math.min(1.6, (target.x - drift) / GOAL_HALF_WIDTH)),
+    aimY: Math.max(0, Math.min(1.6, target.y / GOAL_HEIGHT)),
+    power,
+    curve,
   };
 }
 
@@ -96,7 +125,10 @@ export default function PenaltyGame() {
   const [leaders, setLeaders] = useState<{ top: ScorerRow[]; me: ScorerRow | null } | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [trail, setTrail] = useState<{ x: number; y: number }[]>([]);
-  const swipe = useRef<{ x: number; y: number; t: number }[]>([]);
+  const swipe = useRef<SwipePoint[]>([]);
+  /** Когда начали держать палец (фаза power) и какая сила зафиксирована. */
+  const [chargingSince, setChargingSince] = useState<number | null>(null);
+  const [power, setPower] = useState<number | null>(null);
   const [inTelegram, setInTelegram] = useState(false);
 
   const exit = useCallback(() => router.push("/"), [router]);
@@ -147,7 +179,8 @@ export default function PenaltyGame() {
     if (mode === "freekick") setPracticeSpot(randomSpot());
     scene.current?.reset();
     setLast(null);
-    setPhase("aim");
+    setPower(null);
+    setPhase("power");
   };
 
   const shoot = async (input: ShotInput) => {
@@ -200,36 +233,65 @@ export default function PenaltyGame() {
   };
 
   const onPointerDown = (e: React.PointerEvent) => {
+    if (phase === "power") {
+      setChargingSince(performance.now());
+      haptic.impact("light");
+      (e.target as Element).setPointerCapture?.(e.pointerId);
+      return;
+    }
     if (phase !== "aim") return;
-    // Бить можно только свайпом из нижней половины экрана — от мяча.
+    // Прицел ведём от мяча: начинать свайп можно в нижней части экрана.
     if (e.clientY < window.innerHeight * 0.45) return;
     swipe.current = [{ x: e.clientX, y: e.clientY, t: performance.now() }];
     setTrail([{ x: e.clientX, y: e.clientY }]);
     (e.target as Element).setPointerCapture?.(e.pointerId);
   };
   const onPointerMove = (e: React.PointerEvent) => {
-    if (phase !== "aim" || !swipe.current.length) return;
+    if (phase !== "aim" || !swipe.current.length || power == null) return;
     swipe.current.push({ x: e.clientX, y: e.clientY, t: performance.now() });
     setTrail((tr) => [...tr.slice(-24), { x: e.clientX, y: e.clientY }]);
+    const handle = scene.current;
+    if (handle) handle.setAimPreview(swipeToAim(swipe.current, power, mode, handle.goalPointAt));
+  };
+  const lockPower = () => {
+    if (chargingSince == null) return;
+    const now = performance.now();
+    setChargingSince(null);
+    if (now - chargingSince < MIN_CHARGE_MS) return;
+    const g = powerAt(chargingSince, now);
+    setPower(g);
+    haptic.notify(g < POWER_SWEET_MIN || g > POWER_SWEET_MAX ? "warning" : "success");
+    setPhase("aim");
   };
   const onPointerUp = () => {
-    if (phase !== "aim" || !swipe.current.length) return;
-    const input = swipeToInput(swipe.current, window.innerWidth, window.innerHeight);
+    if (phase === "power") return lockPower();
+    if (phase !== "aim" || !swipe.current.length || power == null) return;
+    const handle = scene.current;
+    const input = handle ? swipeToAim(swipe.current, power, mode, handle.goalPointAt) : null;
     swipe.current = [];
+    handle?.setAimPreview(null);
     window.setTimeout(() => setTrail([]), 180);
     if (input) void shoot(input);
+  };
+  /** Telegram может отменить жест (системный свайп): силу фиксируем, прицел — сбрасываем без удара. */
+  const onPointerCancel = () => {
+    if (phase === "power") return lockPower();
+    swipe.current = [];
+    scene.current?.setAimPreview(null);
+    setTrail([]);
   };
 
   const next = () => {
     if (practice && mode === "freekick") setPracticeSpot(randomSpot());
     scene.current?.reset();
     setLast(null);
+    setPower(null);
     if (!practice && (status?.attemptsLeft ?? 0) <= 0) {
       setPhase("summary");
       void loadLeaders();
       return;
     }
-    setPhase("aim");
+    setPhase("power");
   };
 
   const todayGoals = status?.today.filter((s) => s.result === "goal").length ?? 0;
@@ -237,25 +299,37 @@ export default function PenaltyGame() {
 
   return (
     <div
-      className="fixed inset-0 z-[60] touch-none select-none overflow-hidden bg-background"
+      className="fixed inset-0 z-[60] touch-none select-none overflow-hidden bg-background [-webkit-touch-callout:none]"
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
-      onPointerCancel={onPointerUp}
+      onPointerCancel={onPointerCancel}
+      onContextMenu={(e) => e.preventDefault()}
     >
       <div className="absolute inset-0">
-        <PenaltyScene
-          ref={scene}
-          mode={mode}
-          spot={spot}
-        />
+        <PenaltyScene ref={scene} mode={mode} spot={spot} onKickContact={(pace) => haptic.impact(pace > 0.6 ? "heavy" : "medium")} />
       </div>
+
+      {/* Шкала силы: пока набираем и пока целимся. */}
+      <AnimatePresence>
+        {(phase === "power" || phase === "aim") && (
+          <motion.div
+            className="absolute right-4 top-1/2 -translate-y-1/2"
+            initial={{ opacity: 0, x: 12 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0 }}
+          >
+            <PowerMeter chargingSince={chargingSince} locked={power} />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Верхняя панель: закрыть, режим, попытки. */}
       <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between px-4 pb-3 pt-[max(12px,env(safe-area-inset-top))]">
         <button
           type="button"
           onClick={exit}
+          onPointerDown={(e) => e.stopPropagation()}
           aria-label="Закрыть игру"
           className="pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full bg-background/60 text-foreground backdrop-blur"
         >
@@ -289,14 +363,14 @@ export default function PenaltyGame() {
         <span className="w-10" />
       </div>
 
-      {/* След свайпа. */}
+      {/* След пальца — тонкий: главный ориентир при прицеливании — пунктир траектории в сцене. */}
       {trail.length > 1 && (
         <svg className="pointer-events-none absolute inset-0 h-full w-full" aria-hidden>
           <polyline
             points={trail.map((p) => `${p.x},${p.y}`).join(" ")}
             fill="none"
-            stroke="rgba(0,232,240,0.85)"
-            strokeWidth="6"
+            stroke="rgba(255,255,255,0.35)"
+            strokeWidth="3"
             strokeLinecap="round"
             strokeLinejoin="round"
           />
@@ -304,9 +378,24 @@ export default function PenaltyGame() {
       )}
 
       {/* Подсказка перед ударом. */}
-      <AnimatePresence>
+      <AnimatePresence mode="wait">
+        {phase === "power" && (
+          <motion.div
+            key="power"
+            className="pointer-events-none absolute inset-x-0 bottom-[max(28px,env(safe-area-inset-bottom))] flex flex-col items-center"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+          >
+            <p className="t-small rounded-full bg-background/70 px-4 py-2 text-foreground backdrop-blur">
+              {chargingSince == null ? "Зажми экран, чтобы набрать силу" : "Отпусти в голубой зоне"}
+            </p>
+            <p className="t-caption mt-2 text-foreground/70">Слабо — мяч катится · до упора — теряешь точность</p>
+          </motion.div>
+        )}
         {phase === "aim" && (
           <motion.div
+            key="aim"
             className="pointer-events-none absolute inset-x-0 bottom-[max(28px,env(safe-area-inset-bottom))] flex flex-col items-center"
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
@@ -318,9 +407,9 @@ export default function PenaltyGame() {
               transition={{ duration: 1.4, repeat: Infinity, ease: "easeInOut" }}
             />
             <p className="t-small rounded-full bg-background/70 px-4 py-2 text-foreground backdrop-blur">
-              Проведи пальцем от мяча к воротам
+              Проведи от мяча к точке в воротах
             </p>
-            <p className="t-caption mt-2 text-foreground/70">Быстрее — сильнее · дугой — закрутка</p>
+            <p className="t-caption mt-2 text-foreground/70">Отпусти палец — удар · дугой — закрутка</p>
           </motion.div>
         )}
       </AnimatePresence>

@@ -14,13 +14,13 @@ export const GOAL_HEIGHT = 2.44;
 export const PENALTY_DISTANCE = 11;
 export const BALL_RADIUS = 0.11;
 
-/** Что прислал клиент после свайпа. Все значения нормализованы и ограничиваются на сервере. */
+/** Что прислал клиент: сила со шкалы и прицел свайпом. Все значения ограничиваются на сервере. */
 export type ShotInput = {
   /** Прицел по ширине: -1 — левая штанга, 1 — правая, за пределами ±1 — мимо. */
   aimX: number;
   /** Прицел по высоте: 0 — по газону, 1 — под перекладину. */
   aimY: number;
-  /** Сила: 0..1 (скорость свайпа). */
+  /** Сила: положение шкалы 0..1 (сколько держали палец). */
   power: number;
   /** Закрутка: -1..1 (изгиб траектории свайпа). */
   curve: number;
@@ -46,7 +46,7 @@ export type ShotOutcome = {
   origin: KickSpot;
   wall: Wall | null;
   /** Куда реально прилетел мяч в плоскости ворот (с учётом неточности удара). */
-  ball: { x: number; y: number; flightMs: number; curveM: number; lift: number };
+  ball: { x: number; y: number; flightMs: number; curveM: number; lift: number; pace: number };
   /** Прыжок вратаря: куда и когда он двинулся и где оказались его руки. */
   keeper: { startMs: number; startX: number; handX: number; handY: number; diveMs: number; guessed: boolean };
   /** «Девятка» — угол под перекладиной. */
@@ -98,26 +98,117 @@ export function wallFor(spot: KickSpot): Wall {
   };
 }
 
-export function simulateShot(input: ShotInput, rand: Random, mode: GameMode = "penalty", spot: KickSpot = PENALTY_SPOT): ShotOutcome {
+/** Рабочая зона шкалы силы: ниже — недобор (мяч катится), выше — перебор (теряется точность). */
+export const POWER_SWEET_MIN = 0.35;
+export const POWER_SWEET_MAX = 0.95;
+
+/**
+ * Шкала силы → темп удара. `pace` 0..1 — где удар внутри рабочей зоны (0 и в недоборе),
+ * `over` 0..1 — насколько залезли в перебор.
+ */
+export function powerProfile(power: number) {
+  const g = clamp(power, 0, 1);
+  return {
+    g,
+    weak: g < POWER_SWEET_MIN,
+    pace: clamp((g - POWER_SWEET_MIN) / (POWER_SWEET_MAX - POWER_SWEET_MIN), 0, 1),
+    over: clamp((g - POWER_SWEET_MAX) / (1 - POWER_SWEET_MAX), 0, 1),
+  };
+}
+
+/**
+ * Скорость мяча, м/с. Пенальти: недобор 9–15 (32–54 км/ч), рабочая зона 15–32
+ * (54–115 км/ч), перебор до 33. Штрафной: 12–18, 18–32, до 33.
+ */
+export function shotSpeed(power: number, freekick: boolean) {
+  const { g, weak, pace, over } = powerProfile(power);
+  const base = freekick ? 18 : 15;
+  if (weak) return base - 6 + (g / POWER_SWEET_MIN) * 6;
+  return base + pace * (freekick ? 14 : 17) + over;
+}
+
+/** Высота после недобора: слабый удар не поднимается и катится низом. */
+function finalHeight(y: number, power: number, over: number) {
+  let h = y + over * 0.3;
+  if (power < POWER_SWEET_MIN) h *= 0.6 + power;
+  return Math.max(BALL_RADIUS, h);
+}
+
+/**
+ * Дуга: мягкий удар выше навесом, со штрафного — чтобы перелететь стенку.
+ * Недобор со штрафного так не работает: вялый удар не поднимается над стенкой.
+ */
+function liftFor(freekick: boolean, aimY: number, power: number, y: number) {
+  if (!freekick) return Math.min(0.9, y * 0.25);
+  const { pace, weak, g } = powerProfile(power);
+  const lift = 0.8 + aimY * 0.8 + (1 - pace) * 0.9;
+  return weak ? lift * (0.3 + 0.7 * (g / POWER_SWEET_MIN)) : lift;
+}
+
+/** Прицел без случайности: куда полетит мяч, если удар получится идеально. */
+function shotPlan(input: ShotInput, mode: GameMode, spot: KickSpot) {
   const { aimX, aimY, power, curve } = input;
   const freekick = mode === "freekick";
   const origin = freekick ? spot : PENALTY_SPOT;
-  const distance = Math.hypot(origin.x, origin.z);
-
-  // Скорость и время полёта: слабый удар ~55 км/ч, пушечный ~115 км/ч.
-  const speed = (freekick ? 18 : 15) + power * (freekick ? 14 : 17); // м/с
-  const flightMs = Math.round((distance / speed) * 1000);
-
-  // Неточность: чем сильнее бьёшь, тем больше разброс. Со штрафного — дальше, значит, разброс больше.
-  const spread = (freekick ? 0.22 : 0.12) + Math.pow(power, 3) * (freekick ? 0.75 : 0.55) + Math.abs(curve) * 0.1;
+  const { pace, over } = powerProfile(power);
+  const speed = shotSpeed(power, freekick);
   const curveM = curve * (freekick ? 2.3 : 1.1);
-  let x = aimX * GOAL_HALF_WIDTH + curveM * 0.35 + gaussian(rand) * spread;
-  let y = aimY * GOAL_HEIGHT + gaussian(rand) * spread * 0.7;
-  if (power < 0.3) y *= 0.55 + power;
-  y = Math.max(BALL_RADIUS, y);
+  return {
+    freekick,
+    origin,
+    pace,
+    over,
+    flightMs: Math.round((Math.hypot(origin.x, origin.z) / speed) * 1000),
+    curveM,
+    x: aimX * GOAL_HALF_WIDTH + curveM * 0.35,
+    y: aimY * GOAL_HEIGHT,
+    // Неточность: чем сильнее бьёшь, тем больше разброс; перебор добавляет ещё. Со штрафного — дальше, разброс больше.
+    spread:
+      (freekick ? 0.22 : 0.12) +
+      Math.pow(pace, 3) * (freekick ? 0.75 : 0.55) +
+      Math.abs(curve) * 0.1 +
+      over * (freekick ? 0.5 : 0.35),
+  };
+}
 
-  // Дуга: мягкий удар выше навесом, со штрафного — чтобы перелететь стенку.
-  const lift = freekick ? 0.8 + aimY * 0.8 + (1 - power) * 0.9 : Math.min(0.9, y * 0.25);
+/**
+ * Пунктир прицела: первые `fraction` траектории идеального удара.
+ * Разброс, вратарь и стенка не учитываются — исход по-прежнему решает simulateShot.
+ */
+export function previewPath(input: ShotInput, mode: GameMode, spot: KickSpot, fraction = 0.7, steps = 24) {
+  const plan = shotPlan(input, mode, spot);
+  const y = finalHeight(plan.y, input.power, plan.over);
+  const ball = { x: plan.x, y, curveM: plan.curveM, lift: liftFor(plan.freekick, input.aimY, input.power, y) };
+  return Array.from({ length: steps + 1 }, (_, i) => trajectoryPoint({ origin: plan.origin, ball }, (i / steps) * fraction));
+}
+
+/*
+ * Мяч быстрее всего сразу после касания и теряет скорость в воздухе. Время
+ * прилёта не меняется — меняется только распределение пути по времени, поэтому
+ * тайминги вратаря остаются прежними. Сильный удар резче «выстреливает».
+ */
+const dragFor = (pace: number) => 0.35 + pace * 0.55;
+
+/** Доля пройденного пути к доле времени полёта. */
+export function flightProgress(timeFraction: number, pace: number) {
+  const c = dragFor(pace);
+  return (1 - Math.exp(-c * clamp(timeFraction, 0, 1))) / (1 - Math.exp(-c));
+}
+
+/** Обратное к flightProgress: когда мяч пройдёт долю пути `pathFraction`. */
+export function flightTimeAt(pathFraction: number, pace: number) {
+  const c = dragFor(pace);
+  return -Math.log(1 - clamp(pathFraction, 0, 1) * (1 - Math.exp(-c))) / c;
+}
+
+export function simulateShot(input: ShotInput, rand: Random, mode: GameMode = "penalty", spot: KickSpot = PENALTY_SPOT): ShotOutcome {
+  const { aimY, power, curve } = input;
+  const plan = shotPlan(input, mode, spot);
+  const { freekick, origin, pace, flightMs, curveM, spread } = plan;
+
+  let x = plan.x + gaussian(rand) * spread;
+  let y = finalHeight(plan.y + gaussian(rand) * spread * 0.7, power, plan.over);
+  const lift = liftFor(freekick, aimY, power, y);
 
   const nearPost = Math.abs(Math.abs(x) - GOAL_HALF_WIDTH) < BALL_RADIUS * 1.05 && y < GOAL_HEIGHT + BALL_RADIUS;
   const nearBar = Math.abs(y - GOAL_HEIGHT) < BALL_RADIUS * 1.05 && Math.abs(x) < GOAL_HALF_WIDTH + BALL_RADIUS;
@@ -131,7 +222,7 @@ export function simulateShot(input: ShotInput, rand: Random, mode: GameMode = "p
     blockedByWall = Math.abs(p.x - wall.x) < wall.halfWidth + BALL_RADIUS && p.y < wall.top + BALL_RADIUS;
   }
 
-  const keeper = keeperDive({ x, y, flightMs, curve, power, freekick, startX: wall ? -Math.sign(wall.x || 1) * 0.9 : 0 }, rand);
+  const keeper = keeperDive({ x, y, flightMs, curve, power: pace, freekick, startX: wall ? -Math.sign(wall.x || 1) * 0.9 : 0 }, rand);
 
   let result: ShotResult;
   if (blockedByWall) result = "wall";
@@ -153,7 +244,7 @@ export function simulateShot(input: ShotInput, rand: Random, mode: GameMode = "p
     result,
     origin,
     wall,
-    ball: { x: round(x), y: round(y), flightMs, curveM: round(curveM), lift: round(lift) },
+    ball: { x: round(x), y: round(y), flightMs, curveM: round(curveM), lift: round(lift), pace: round(pace) },
     keeper: {
       startMs: keeper.startMs,
       startX: keeper.startX,

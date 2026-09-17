@@ -7,6 +7,7 @@ import {
   AnimationAction,
   AnimationClip,
   AnimationMixer,
+  MathUtils,
   CanvasTexture,
   Color,
   DoubleSide,
@@ -384,49 +385,6 @@ function Footballer({ kit, skin = "#c89a78", hair = "#1c1917" }: { kit: Kit; ski
   );
 }
 
-/** Вратарь соперника: руки в стороны, перчатки. */
-function Keeper({ keeperRef, armsRef }: { keeperRef: React.RefObject<Group | null>; armsRef: React.RefObject<Group | null> }) {
-  const kit = "#f97316";
-  return (
-    <group ref={keeperRef} position={[0, 0, 0.35]}>
-      {[-0.16, 0.16].map((x) => (
-        <group key={x} position={[x, 0, 0]} rotation={[0, 0, x > 0 ? -0.08 : 0.08]}>
-          <mesh position={[0, 0.3, 0]} castShadow>
-            <capsuleGeometry args={[0.075, 0.42, 6, 12]} />
-            <meshStandardMaterial color={kit} roughness={0.7} />
-          </mesh>
-          <mesh position={[0, 0.66, 0]} castShadow>
-            <capsuleGeometry args={[0.1, 0.22, 6, 12]} />
-            <meshStandardMaterial color="#1f2937" roughness={0.7} />
-          </mesh>
-        </group>
-      ))}
-      <mesh position={[0, 1.17, 0]} castShadow>
-        <capsuleGeometry args={[0.22, 0.5, 8, 16]} />
-        <meshStandardMaterial color={kit} roughness={0.6} />
-      </mesh>
-      <mesh position={[0, 1.66, 0]} castShadow>
-        <sphereGeometry args={[0.13, 20, 20]} />
-        <meshStandardMaterial color="#d8a47f" roughness={0.8} />
-      </mesh>
-      <group ref={armsRef} position={[0, 1.38, 0]}>
-        {[-1, 1].map((side) => (
-          <group key={side} position={[side * 0.28, 0, 0]} rotation={[0, 0, side * 0.85]}>
-            <mesh position={[0, -0.28, 0]} castShadow>
-              <capsuleGeometry args={[0.06, 0.46, 6, 12]} />
-              <meshStandardMaterial color={kit} roughness={0.6} />
-            </mesh>
-            <mesh position={[0, -0.6, 0]} castShadow>
-              <sphereGeometry args={[0.12, 16, 16]} />
-              <meshStandardMaterial color="#f8fafc" roughness={0.5} />
-            </mesh>
-          </group>
-        ))}
-      </group>
-    </group>
-  );
-}
-
 /** Стенка соперника: игроки плечом к плечу, лицом к мячу. */
 function WallPlayers({ spot, wallRef }: { spot: KickSpot; wallRef: React.RefObject<Group | null> }) {
   const wall = useMemo(() => wallFor(spot), [spot]);
@@ -504,15 +462,15 @@ const FADE_KICK_S = 0.1;
 const FADE_IDLE_S = 0.3;
 
 /**
- * Материал модели экспортирован «засвеченным»: нет карты metallic/roughness
- * (по glTF это металл 1 / шероховатость 1), текстура стоит ещё и свечением
- * на полную, specularColorFactor = 2. Правим копию материала при загрузке —
- * текстура и UV остаются, GLB и кэш загрузчика не трогаем. false — как в файле.
- * В umetov-final.glb уже вшита насыщенная baseColor (WebP) из статичной модели.
+ * Материалы моделей из Meshy экспортированы «засвеченными»: нет карты
+ * metallic/roughness (по glTF это металл 1 / шероховатость 1), текстура стоит
+ * ещё и свечением на полную, specularColorFactor = 2. Правим копию материала
+ * при загрузке — текстура и UV остаются, GLB и кэш загрузчика не трогаем.
+ * false — как в файле. В обоих *-final.glb уже вшита насыщенная baseColor (WebP).
  */
-const FIX_UMETOV_MATERIAL = true;
+const FIX_MESHY_MATERIAL = true;
 
-function matteUmetovMaterial(source: Material): Material {
+function matteMeshyMaterial(source: Material): Material {
   if (!(source instanceof MeshStandardMaterial)) return source;
   const m = source.clone();
   m.metalness = 0;
@@ -585,8 +543,8 @@ function ShooterModel({ timeline, from, to, yaw }: {
         // Границы скиннед-меша считаются по позе привязки — в анимации его может «отсечь».
         o.frustumCulled = false;
         const mesh = o as Mesh;
-        if (FIX_UMETOV_MATERIAL) {
-          mesh.material = Array.isArray(mesh.material) ? mesh.material.map(matteUmetovMaterial) : matteUmetovMaterial(mesh.material);
+        if (FIX_MESHY_MATERIAL) {
+          mesh.material = Array.isArray(mesh.material) ? mesh.material.map(matteMeshyMaterial) : matteMeshyMaterial(mesh.material);
         }
       }
     });
@@ -678,6 +636,185 @@ function ShooterModel({ timeline, from, to, yaw }: {
   );
 }
 
+/** 3D-вратарь (Бакытов) со скелетом Mixamo — та же связка, что у бьющего. */
+const KEEPER_MODEL_URL = "/models/goalkeepers/bakytov/bakytov-final.glb";
+const GK_CLIP_IDLE = "Idle_02";
+const GK_CLIP_DIVE = "Leap_Right_and_Catch";
+const GK_CLIP_PARRY = "Two_Handed_Parry";
+/** Вратарь стоит чуть впереди линии ворот. */
+const KEEPER_Z = 0.35;
+
+/*
+ * Тайминги сняты с клипов. В прыжке руки идут сверху вниз: 2.2 м на 0.90 с,
+ * 0.79 м на 1.45 с — поэтому момент касания выбираем по высоте рук, которую
+ * посчитал сервер, и клип сам даёт нужную позу. Вбок руки уходят на 0.8 м,
+ * остальное расстояние до мяча проходит корень модели.
+ */
+const DIVE_FROM_S = 0.35;
+const DIVE_HIGH = { t: 0.9, y: 2.2 };
+const DIVE_LOW = { t: 1.45, y: 0.79 };
+const DIVE_HAND_X = 0.8;
+const PARRY_FROM_S = 0.1;
+const PARRY_CONTACT_S = 0.5;
+const PARRY_HAND_X = 0.2;
+/** Прыжок ускоряем или замедляем, чтобы руки пришли к мячу вовремя. */
+const DIVE_SPEED_RANGE = [0.7, 2.6] as const;
+
+/** Зеркальный клип: прыжок вправо становится прыжком влево. */
+function mirrorClip(clip: AnimationClip) {
+  const swapSide = (name: string) => name.replace(/Left|Right/, (m) => (m === "Left" ? "Right" : "Left"));
+  const tracks = clip.tracks.map((track) => {
+    const mirrored = track.clone();
+    const dot = mirrored.name.lastIndexOf(".");
+    const prop = mirrored.name.slice(dot + 1);
+    mirrored.name = swapSide(mirrored.name.slice(0, dot)) + "." + prop;
+    const v = mirrored.values as Float32Array;
+    // Отражение относительно плоскости YZ: у поворота меняют знак y и z, у смещения — x.
+    if (prop === "quaternion") for (let i = 0; i < v.length; i += 4) { v[i + 1] = -v[i + 1]; v[i + 2] = -v[i + 2]; }
+    else if (prop === "position") for (let i = 0; i < v.length; i += 3) v[i] = -v[i];
+    return mirrored;
+  });
+  return new AnimationClip(clip.name + "_Mirrored", clip.duration, tracks);
+}
+
+type KeeperPlan = {
+  action: AnimationAction;
+  fromS: number;
+  contactS: number;
+  startMs: number;
+  speed: number;
+  fromX: number;
+  targetX: number;
+  clipT: number;
+};
+
+/**
+ * Вратарь: Idle_02 на линии, по исходу удара — прыжок в сторону мяча
+ * (клип «вправо» или его зеркало) либо отбитие двумя руками по центру.
+ * Куда и когда прыгать, решает сервер — здесь только поза и движение корня.
+ */
+function KeeperModel({ timeline, keeperRef, home }: {
+  timeline: React.RefObject<Timeline | null>;
+  keeperRef: React.RefObject<Group | null>;
+  home: number;
+}) {
+  const gltf = useLoader(GLTFLoader, KEEPER_MODEL_URL);
+  const plan = useRef<KeeperPlan | null>(null);
+  const model = useMemo(() => {
+    const clone = cloneSkinned(gltf.scene);
+    clone.traverse((o) => {
+      if ((o as Mesh).isMesh) {
+        o.castShadow = true;
+        o.frustumCulled = false;
+        const mesh = o as Mesh;
+        if (FIX_MESHY_MATERIAL) {
+          mesh.material = Array.isArray(mesh.material) ? mesh.material.map(matteMeshyMaterial) : matteMeshyMaterial(mesh.material);
+        }
+      }
+    });
+    return clone;
+  }, [gltf]);
+
+  const rig = useMemo(() => {
+    const mixer = new AnimationMixer(model);
+    const clip = (name: string) => {
+      const found = AnimationClip.findByName(gltf.animations, name);
+      if (!found) throw new Error(`В ${KEEPER_MODEL_URL} нет клипа ${name}`);
+      return found;
+    };
+    const once = (c: AnimationClip) => {
+      const action = mixer.clipAction(c);
+      action.setLoop(LoopOnce, 1);
+      action.clampWhenFinished = true;
+      // Время прыжка ведём вручную — чтобы руки встретили мяч.
+      action.timeScale = 0;
+      return action;
+    };
+    const dive = clip(GK_CLIP_DIVE);
+    return {
+      mixer,
+      idle: mixer.clipAction(clip(GK_CLIP_IDLE)),
+      diveRight: once(dive),
+      diveLeft: once(mirrorClip(dive)),
+      parry: once(clip(GK_CLIP_PARRY)),
+    };
+  }, [gltf, model]);
+
+  useEffect(() => {
+    rig.idle.play();
+    return () => {
+      rig.mixer.stopAllAction();
+    };
+  }, [rig]);
+
+  useFrame((state, delta) => {
+    const g = keeperRef.current;
+    if (!g) return;
+    const { mixer, idle } = rig;
+    const tl = timeline.current;
+    const o = tl?.outcome ?? null;
+
+    if (!o || !tl || tl.flightStart == null) {
+      // Ожидание удара: переминается на линии.
+      if (plan.current) {
+        plan.current = null;
+        mixer.stopAllAction();
+        idle.reset().play();
+      }
+      const t = state.clock.getElapsedTime();
+      g.position.set(home + Math.sin(t * 1.3) * 0.22, Math.abs(Math.sin(t * 2.6)) * 0.03, KEEPER_Z);
+      mixer.update(delta);
+      return;
+    }
+
+    const k = o.keeper;
+    const slowMo = slowMoFor(o.ball.pace);
+    if (!plan.current) {
+      const dx = k.handX - k.startX;
+      const side = dx >= 0 ? 1 : -1;
+      // Мяч рядом и не низом — вратарь отбивает двумя руками, не прыгая.
+      const parry = Math.abs(dx) < 0.7 && k.handY > 1.05 && k.handY < 2;
+      const u = clamp01((DIVE_HIGH.y - k.handY) / (DIVE_HIGH.y - DIVE_LOW.y));
+      const contactS = parry ? PARRY_CONTACT_S : DIVE_HIGH.t + u * (DIVE_LOW.t - DIVE_HIGH.t);
+      const fromS = parry ? PARRY_FROM_S : DIVE_FROM_S;
+      const startMs = k.startMs * slowMo;
+      const available = Math.max(140, o.ball.flightMs * slowMo - startMs);
+      const handX = parry ? PARRY_HAND_X : DIVE_HAND_X;
+      plan.current = {
+        action: parry ? rig.parry : side >= 0 ? rig.diveLeft : rig.diveRight,
+        fromS,
+        contactS,
+        startMs,
+        speed: MathUtils.clamp(((contactS - fromS) * 1000) / available, DIVE_SPEED_RANGE[0], DIVE_SPEED_RANGE[1]),
+        fromX: g.position.x,
+        targetX: k.handX - side * handX,
+        clipT: fromS,
+      };
+      const action = plan.current.action;
+      action.reset().play();
+      seekAction(action, fromS);
+      action.crossFadeFrom(idle, 0.12, false);
+    }
+
+    const p = plan.current;
+    const elapsed = performance.now() - tl.flightStart;
+    if (elapsed >= p.startMs) {
+      // До касания прыжок подгоняем по времени, после — доигрывается как снят.
+      p.clipT = Math.min(p.clipT + delta * (p.clipT < p.contactS ? p.speed : 1), p.action.getClip().duration);
+      seekAction(p.action, p.clipT);
+    }
+    const progress = clamp01((p.clipT - p.fromS) / Math.max(0.01, p.contactS - p.fromS));
+    g.position.set(MathUtils.lerp(p.fromX, p.targetX, easeOut(progress)), 0, KEEPER_Z);
+    mixer.update(delta);
+  });
+
+  return (
+    <group ref={keeperRef} position={[home, 0, KEEPER_Z]}>
+      <primitive object={model} />
+    </group>
+  );
+}
+
 type SceneProps = {
   mode: GameMode;
   spot: KickSpot;
@@ -688,7 +825,6 @@ type SceneProps = {
 function SceneContent({ handleRef, mode, spot, onKickContact }: SceneProps & { handleRef: React.Ref<PenaltySceneHandle> }) {
   const ball = useRef<Mesh>(null);
   const keeper = useRef<Group>(null);
-  const arms = useRef<Group>(null);
   const net = useRef<Mesh>(null);
   const wall = useRef<Group>(null);
   const timeline = useRef<Timeline | null>(null);
@@ -725,9 +861,6 @@ function SceneContent({ handleRef, mode, spot, onKickContact }: SceneProps & { h
     for (const m of trail.current) if (m) m.visible = false;
     ball.current?.position.set(origin.x, BALL_RADIUS, origin.z);
     ball.current?.rotation.set(0, 0, 0);
-    keeper.current?.position.set(keeperHome, 0, 0.35);
-    keeper.current?.rotation.set(0, 0, 0);
-    arms.current?.rotation.set(0, 0, 0);
     wall.current?.position.set(0, 0, 0);
     const geo = net.current?.geometry as PlaneGeometry | undefined;
     if (geo && netBase.current) {
@@ -768,9 +901,8 @@ function SceneContent({ handleRef, mode, spot, onKickContact }: SceneProps & { h
     const now = performance.now();
     const t = state.clock.getElapsedTime();
     const b = ball.current;
-    const k = keeper.current;
     const cam = state.camera;
-    if (!b || !k) return;
+    if (!b) return;
 
     cam.position.set(cameraPos.x + Math.sin(t * 0.6) * 0.04, cameraPos.y + Math.sin(t * 0.9) * 0.02, cameraPos.z);
     cam.lookAt(CAMERA_TARGET);
@@ -791,9 +923,6 @@ function SceneContent({ handleRef, mode, spot, onKickContact }: SceneProps & { h
     }
 
     if (!tl) {
-      // Ожидание: вратарь пружинит на ногах.
-      k.position.x = keeperHome + Math.sin(t * 1.4) * 0.25;
-      k.position.y = Math.abs(Math.sin(t * 2.8)) * 0.04;
       b.position.set(origin.x, BALL_RADIUS, origin.z);
       return;
     }
@@ -866,16 +995,6 @@ function SceneContent({ handleRef, mode, spot, onKickContact }: SceneProps & { h
       (m.material as MeshBasicMaterial).opacity = (0.3 - i * 0.038) * (0.45 + 0.55 * pace);
     });
 
-    // Вратарь: стартует в startMs и долетает до точки рук за diveMs.
-    const d = easeOut(clamp01((elapsed - o.keeper.startMs * slowMo) / (o.keeper.diveMs * slowMo)));
-    const rel = o.keeper.handX - o.keeper.startX;
-    const lean = Math.max(-1.35, Math.min(1.35, -rel * 0.45));
-    k.position.x = o.keeper.startX + rel * 0.72 * d;
-    const jump = Math.max(0, (o.keeper.handY - 1.3) * 0.55) + (Math.abs(rel) > 1.4 ? 0.3 : 0);
-    k.position.y = jump * Math.sin((Math.PI / 2) * d);
-    k.rotation.z = lean * d;
-    if (arms.current) arms.current.rotation.z = lean * 0.4 * d;
-
     // Сетка прогибается там, куда прилетел мяч, и пару раз пружинит обратно.
     if (o.result === "goal" && elapsed > flight && net.current) {
       if (!tl.netHit) {
@@ -913,7 +1032,9 @@ function SceneContent({ handleRef, mode, spot, onKickContact }: SceneProps & { h
       <Stands />
       <Pitch />
       <Goal netRef={net} />
-      <Keeper keeperRef={keeper} armsRef={arms} />
+      <Suspense fallback={null}>
+        <KeeperModel timeline={timeline} keeperRef={keeper} home={keeperHome} />
+      </Suspense>
       {mode === "freekick" && <WallPlayers spot={origin} wallRef={wall} />}
       <Suspense fallback={null}>
         <ShooterModel timeline={timeline} from={runFrom} to={runTo} yaw={yaw} />

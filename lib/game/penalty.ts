@@ -43,6 +43,43 @@ export type ShotResult = "goal" | "saved" | "post" | "miss" | "wall";
 
 export type GameMode = "penalty" | "freekick";
 
+/** Уровень вратаря: чем выше, тем лучше отбивает — и тем дороже гол. */
+export type KeeperLevel = "junior" | "amateur" | "pro";
+export const KEEPER_LEVELS: KeeperLevel[] = ["junior", "amateur", "pro"];
+
+/**
+ * Умения вратаря по уровням. «Любитель» — то, как вратарь играл до появления
+ * уровней, остальные два отстроены от него.
+ *  guess — как часто угадывает сторону заранее;
+ *  reactionMs — задержка реакции: минимум и случайная добавка;
+ *  read — базовая ошибка в оценке точки удара, м;
+ *  diveSpeed — скорость броска вбок, м/с;
+ *  reach — радиус «ладоней» вместе с мячом, м;
+ *  tricky — насколько сильно его обманывают закрутка и наклбол.
+ */
+const KEEPER_SKILL: Record<KeeperLevel, {
+  guess: number;
+  reactionMs: [number, number];
+  read: number;
+  diveSpeed: number;
+  reach: number;
+  tricky: number;
+}> = {
+  junior: { guess: 0.22, reactionMs: [200, 110], read: 0.28, diveSpeed: 6.5, reach: 0.54, tricky: 1.25 },
+  amateur: { guess: 0.3, reactionMs: [150, 90], read: 0.18, diveSpeed: 7.4, reach: 0.6, tricky: 1 },
+  pro: { guess: 0.36, reactionMs: [115, 75], read: 0.12, diveSpeed: 8.1, reach: 0.65, tricky: 0.7 },
+};
+
+/**
+ * Награда за уровень. Против сильного вратаря забить труднее, поэтому гол дороже:
+ * без этого выгоднее было бы весь день расстреливать юниора.
+ */
+const LEVEL_REWARD: Record<KeeperLevel, { points: number; coins: number }> = {
+  junior: { points: 1, coins: 1 },
+  amateur: { points: 2, coins: 1.5 },
+  pro: { points: 3, coins: 2 },
+};
+
 /** Точка удара: x — поперёк поля, z — расстояние до линии ворот. */
 export type KickSpot = { x: number; z: number };
 
@@ -55,6 +92,7 @@ export const WALL_DISTANCE = 9.15;
 
 export type ShotOutcome = {
   mode: GameMode;
+  level: KeeperLevel;
   result: ShotResult;
   origin: KickSpot;
   wall: Wall | null;
@@ -253,7 +291,26 @@ export function flightTimeAt(pathFraction: number, pace: number) {
   return -Math.log(1 - clamp(pathFraction, 0, 1) * (1 - Math.exp(-c))) / c;
 }
 
-export function simulateShot(input: ShotInput, rand: Random, mode: GameMode = "penalty", spot: KickSpot = PENALTY_SPOT): ShotOutcome {
+/** Награда за гол на выбранном уровне — для подсказок в интерфейсе. */
+export function goalReward(mode: GameMode, level: KeeperLevel) {
+  const reward = LEVEL_REWARD[level];
+  const base = mode === "freekick" ? 2 : 1;
+  const coins = mode === "freekick" ? 10 : 5;
+  return {
+    points: base * reward.points,
+    coins: Math.round(coins * reward.coins),
+    topPoints: (base + 1) * reward.points,
+    topCoins: Math.round((coins + 5) * reward.coins),
+  };
+}
+
+export function simulateShot(
+  input: ShotInput,
+  rand: Random,
+  mode: GameMode = "penalty",
+  spot: KickSpot = PENALTY_SPOT,
+  level: KeeperLevel = "amateur",
+): ShotOutcome {
   const { aimY, power, kind, shape } = input;
   const plan = shotPlan(input, mode, spot);
   const { freekick, origin, pace, flightMs, curveM, spread } = plan;
@@ -276,7 +333,10 @@ export function simulateShot(input: ShotInput, rand: Random, mode: GameMode = "p
     blockedByWall = Math.abs(p.x - wall.x) < wall.halfWidth + BALL_RADIUS && p.y < wall.top + BALL_RADIUS;
   }
 
-  const keeper = keeperDive({ x, y, flightMs, curveM, kind, power: pace, freekick, startX: wall ? -Math.sign(wall.x || 1) * 0.9 : 0 }, rand);
+  const keeper = keeperDive(
+    { x, y, flightMs, curveM, kind, power: pace, freekick, level, startX: wall ? -Math.sign(wall.x || 1) * 0.9 : 0 },
+    rand,
+  );
 
   let result: ShotResult;
   if (blockedByWall) result = "wall";
@@ -291,10 +351,12 @@ export function simulateShot(input: ShotInput, rand: Random, mode: GameMode = "p
   }
 
   const topCorner = result === "goal" && Math.abs(x) > GOAL_HALF_WIDTH * 0.62 && y > GOAL_HEIGHT * 0.62;
+  const reward = LEVEL_REWARD[level];
   const basePoints = freekick ? 2 : 1;
 
   return {
     mode,
+    level,
     result,
     origin,
     wall,
@@ -308,8 +370,8 @@ export function simulateShot(input: ShotInput, rand: Random, mode: GameMode = "p
       guessed: keeper.guessed,
     },
     topCorner,
-    points: result === "goal" ? basePoints + (topCorner ? 1 : 0) : 0,
-    coins: result === "goal" ? (freekick ? 10 : 5) + (topCorner ? 5 : 0) : 0,
+    points: result === "goal" ? (basePoints + (topCorner ? 1 : 0)) * reward.points : 0,
+    coins: result === "goal" ? Math.round(((freekick ? 10 : 5) + (topCorner ? 5 : 0)) * reward.coins) : 0,
   };
 }
 
@@ -323,17 +385,28 @@ const round = (v: number) => Math.round(v * 100) / 100;
  * Сейв — если к моменту прилёта мяча руки успели оказаться рядом.
  */
 function keeperDive(
-  shot: { x: number; y: number; flightMs: number; curveM: number; kind: ShotKind; power: number; freekick: boolean; startX: number },
+  shot: {
+    x: number;
+    y: number;
+    flightMs: number;
+    curveM: number;
+    kind: ShotKind;
+    power: number;
+    freekick: boolean;
+    level: KeeperLevel;
+    startX: number;
+  },
   rand: Random,
 ) {
-  const DIVE_SPEED = 7.4; // м/с вбок
-  const RISE_SPEED = 4.8; // м/с вверх
+  const skill = KEEPER_SKILL[shot.level];
+  const DIVE_SPEED = skill.diveSpeed; // м/с вбок
+  const RISE_SPEED = 4.8 * (0.9 + skill.diveSpeed / 22); // м/с вверх
   const MAX_REACH_X = 3.45;
-  const STANDING_REACH_X = 0.75; // шаг и руки без прыжка
-  const HAND_RADIUS = 0.6; // «ладони» + размер мяча
+  const STANDING_REACH_X = 0.75 * (skill.reach / 0.6); // шаг и руки без прыжка
+  const HAND_RADIUS = skill.reach; // «ладони» + размер мяча
 
   // Со штрафного вратарь прячется за стенкой: реже угадывает и позже видит мяч.
-  const guessed = rand() < (shot.freekick ? 0.15 : 0.3);
+  const guessed = rand() < skill.guess * (shot.freekick ? 0.5 : 1);
   let targetX: number;
   let targetY: number;
   let startMs: number;
@@ -344,12 +417,16 @@ function keeperDive(
     targetY = 0.3 + rand() * 1.8;
     startMs = 0;
   } else {
-    const reactionMs = (shot.freekick ? 360 : 150) + rand() * 90;
+    // Со штрафного мяч летит из-за стенки — вратарь видит его позже.
+    const reactionMs = skill.reactionMs[0] + (shot.freekick ? 210 : 0) + rand() * skill.reactionMs[1];
     // Крученый и особенно наклбол вратарь читает с ошибкой; прямой — лучше всех.
     const curveErr = Math.min(1, Math.abs(shot.curveM) / (shot.freekick ? 2.3 : 1.1)) * (shot.freekick ? 0.8 : 0.3);
     // Медленный парашют вратарь видит хорошо — его козырь только против прыгнувшего вратаря.
     const kindErr = shot.kind === "knuckle" ? 0.3 : shot.kind === "lob" ? -0.08 : 0;
-    const readError = Math.max(0.1, 0.18 + Math.pow(shot.power, 2) * 0.5 + curveErr + kindErr + (shot.freekick ? 0.15 : 0));
+    const readError = Math.max(
+      0.06,
+      skill.read + Math.pow(shot.power, 2) * 0.5 + (curveErr + kindErr) * skill.tricky + (shot.freekick ? 0.15 : 0),
+    );
     targetX = shot.x + gaussian(rand) * readError;
     targetY = shot.y + gaussian(rand) * readError * 0.6;
     startMs = reactionMs;
@@ -367,7 +444,7 @@ function keeperDive(
 
   const dist = Math.hypot(handX - shot.x, handY - shot.y);
   // Мяч в корпус (центр, невысоко) вратарь берёт почти всегда. Парашют сверху — не корпусом: его надо достать руками.
-  const bodyBlock = shot.kind !== "lob" && Math.abs(shot.x - shot.startX) < 0.55 && shot.y < 1.9;
+  const bodyBlock = shot.kind !== "lob" && Math.abs(shot.x - shot.startX) < 0.55 * (skill.reach / 0.6) && shot.y < 1.9;
   // Под парашютом вратарь, который уже прыгнул в угол, отыграть назад не успевает.
   const beatenByLob = shot.kind === "lob" && guessed && Math.abs(handX - shot.x) > 0.8;
   const saves = !beatenByLob && (bodyBlock || dist < HAND_RADIUS);

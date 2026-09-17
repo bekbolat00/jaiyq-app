@@ -1,6 +1,14 @@
 import { createHash, randomInt } from "node:crypto";
 import { fanDisplayName } from "@/lib/fans/scoring";
-import { freeKickSpotFromSeed, simulateShot, type GameMode, type KickSpot, type ShotInput, type ShotOutcome } from "@/lib/game/penalty";
+import {
+  freeKickSpotFromSeed,
+  simulateShot,
+  type GameMode,
+  type KeeperLevel,
+  type KickSpot,
+  type ShotInput,
+  type ShotOutcome,
+} from "@/lib/game/penalty";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export const ATTEMPTS_PER_DAY = 3;
@@ -82,20 +90,26 @@ async function creditCoins(telegramId: number, amount: number): Promise<number |
   return null;
 }
 
-export async function takeShot(telegramId: number, input: ShotInput, mode: GameMode = "penalty"): Promise<ShootResponse> {
+export async function takeShot(
+  telegramId: number,
+  input: ShotInput,
+  mode: GameMode = "penalty",
+  level: KeeperLevel = "amateur",
+): Promise<ShootResponse> {
   const admin = getSupabaseAdminClient();
   const status = await getPenaltyStatus(telegramId);
   if (status.attemptsLeft <= 0) return { ok: false, reason: "no-attempts" };
 
   const attempt = ATTEMPTS_PER_DAY - status.attemptsLeft + 1;
   const spot = mode === "freekick" ? freeKickSpotFor(telegramId, playDate(), attempt) : undefined;
-  const outcome = simulateShot(input, secureRandom, mode, spot);
+  const outcome = simulateShot(input, secureRandom, mode, spot, level);
 
   const { error } = await admin.from("penalty_shots").insert({
     telegram_id: telegramId,
     play_date: playDate(),
     attempt,
     mode,
+    level,
     kind: input.kind,
     aim_x: input.aimX,
     aim_y: input.aimY,

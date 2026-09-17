@@ -13,13 +13,16 @@ import Button from "@/app/components/ui/Button";
 import { useTelegramBackButton } from "@/app/hooks/useTelegramBackButton";
 import {
   freeKickSpotFromSeed,
+  goalReward,
   GOAL_HALF_WIDTH,
   GOAL_HEIGHT,
+  KEEPER_LEVELS,
   PENALTY_SPOT,
   POWER_SWEET_MAX,
   POWER_SWEET_MIN,
   simulateShot,
   type GameMode,
+  type KeeperLevel,
   type KickSpot,
   type ShotInput,
   type ShotKind,
@@ -56,6 +59,13 @@ const RESULT_COPY: Record<ShotResult, { title: string; tone: string }> = {
 const MODE_LABEL: Record<GameMode, string> = { penalty: "Пенальти", freekick: "Штрафной" };
 
 const KIND_LABEL: Record<ShotKind, string> = { straight: "Прямой", curl: "Крученый", lob: "Парашют", knuckle: "Наклбол" };
+
+const LEVEL_LABEL: Record<KeeperLevel, { title: string; hint: string }> = {
+  junior: { title: "Юниор", hint: "Медленно реагирует и часто не дотягивается. Очки — как есть" },
+  amateur: { title: "Любитель", hint: "Крепкий вратарь. Очки ×2, монеты ×1.5" },
+  pro: { title: "Проф", hint: "Читает закрутку и достаёт углы. Очки ×3, монеты ×2" },
+};
+const LEVEL_KEY = "jaiyq.game.keeperLevel";
 
 function randomSpot(): KickSpot {
   return freeKickSpotFromSeed(Math.floor(Math.random() * 2 ** 31));
@@ -174,6 +184,7 @@ export default function PenaltyGame() {
   /** Тип удара, распознанный по текущему жесту — подпись под прицелом. */
   const [liveKind, setLiveKind] = useState<ShotKind | null>(null);
   const [muted, setMutedState] = useState(false);
+  const [level, setLevel] = useState<KeeperLevel>("amateur");
   const [inTelegram, setInTelegram] = useState(false);
 
   const exit = useCallback(() => router.push("/"), [router]);
@@ -202,6 +213,12 @@ export default function PenaltyGame() {
     // Звук: качаем заранее, глушим при выходе из игры. Настройка — только на клиенте.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setMutedState(isMuted());
+    try {
+      const saved = localStorage.getItem(LEVEL_KEY) as KeeperLevel | null;
+      if (saved && KEEPER_LEVELS.includes(saved)) setLevel(saved);
+    } catch {
+      // приватный режим — играем на уровне по умолчанию
+    }
     preloadGameSounds();
     return () => stopCrowdAmbient();
   }, []);
@@ -223,6 +240,7 @@ export default function PenaltyGame() {
   const spot: KickSpot =
     mode === "freekick" ? (practice ? practiceSpot : (status?.nextFreeKick ?? practiceSpot)) : PENALTY_SPOT;
 
+  const reward = goalReward(mode, level);
   const attemptsLeft = status?.attemptsLeft ?? 0;
   const canPlayForPoints = inTelegram && status != null && attemptsLeft > 0;
 
@@ -248,11 +266,11 @@ export default function PenaltyGame() {
     let outcome: ShotOutcome;
     let coins: number | null = null;
     if (practice) {
-      outcome = simulateShot(input, Math.random, mode, spot);
+      outcome = simulateShot(input, Math.random, mode, spot, level);
     } else {
       const res = await postJson<{ outcome: ShotOutcome; attemptsLeft: number; coins: number | null; totalPoints: number }>(
         "/api/game/penalty/shoot",
-        { initData: getTelegramInitData(), input, mode },
+        { initData: getTelegramInitData(), input, mode, level },
       );
       if (!res.data) {
         setNotice(
@@ -408,7 +426,9 @@ export default function PenaltyGame() {
         {phase !== "intro" && (
           <div className="flex items-center gap-2 rounded-full bg-background/60 px-3 py-1.5 backdrop-blur">
             {practice ? (
-              <span className="t-caption text-muted">Тренировка · {MODE_LABEL[mode]}</span>
+              <span className="t-caption text-muted">
+                Тренировка · {MODE_LABEL[mode]} · {LEVEL_LABEL[level].title}
+              </span>
             ) : (
               <>
                 {Array.from({ length: 3 }).map((_, i) => {
@@ -554,10 +574,12 @@ export default function PenaltyGame() {
 
               {phase === "intro" ? (
                 <p className="t-small mt-2 text-muted">
-                  3 удара в день.{" "}
-                  {mode === "penalty"
-                    ? "Пенальти: гол — 1 очко и 5 монет, в девятку — 2 очка и 10 монет."
-                    : "Штрафной: гол — 2 очка и 10 монет, в девятку — 3 очка и 15 монет. Перебрось стенку или обведи её закруткой."}
+                  3 удара в день. {MODE_LABEL[mode]} против уровня «{LEVEL_LABEL[level].title}»: гол — {reward.points}{" "}
+                  {plural(reward.points, "очко", "очка", "очков")} и {reward.coins}{" "}
+                  {plural(reward.coins, "монета", "монеты", "монет")}, в девятку — {reward.topPoints}{" "}
+                  {plural(reward.topPoints, "очко", "очка", "очков")} и {reward.topCoins}{" "}
+                  {plural(reward.topCoins, "монета", "монеты", "монет")}.
+                  {mode === "freekick" ? " Перебрось стенку или обведи её закруткой." : ""}
                 </p>
               ) : (
                 <p className="t-small mt-2 text-muted">
@@ -588,6 +610,35 @@ export default function PenaltyGame() {
                         {MODE_LABEL[m]}
                       </button>
                     ))}
+                  </div>
+
+                  <div className="mt-4">
+                    <p className="t-label mb-2 text-subtle">Вратарь</p>
+                    <div className="flex gap-2" role="radiogroup" aria-label="Уровень вратаря">
+                      {KEEPER_LEVELS.map((l) => (
+                        <button
+                          key={l}
+                          type="button"
+                          role="radio"
+                          aria-checked={level === l}
+                          onClick={() => {
+                            if (level !== l) haptic.select();
+                            setLevel(l);
+                            try {
+                              localStorage.setItem(LEVEL_KEY, l);
+                            } catch {
+                              // не запомнили — не страшно
+                            }
+                          }}
+                          className={`t-small flex-1 rounded-lg px-3 py-2 font-medium transition-colors ${
+                            level === l ? "bg-accent text-background" : "bg-surface-2 text-muted"
+                          }`}
+                        >
+                          {LEVEL_LABEL[l].title}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="t-caption mt-2 text-subtle">{LEVEL_LABEL[level].hint}</p>
                   </div>
 
                   {shooters.length > 0 && (

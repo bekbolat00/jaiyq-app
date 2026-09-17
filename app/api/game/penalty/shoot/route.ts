@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { sanitizeInput, type ShotInput } from "@/lib/game/penalty";
+import { KEEPER_LEVELS, sanitizeInput, type KeeperLevel, type ShotInput } from "@/lib/game/penalty";
 import { MissingTableError, takeShot } from "@/lib/game/penaltyServer";
 import { authenticateTelegramRequest, TelegramAuthError } from "@/lib/telegram/authenticateRequest";
 
 /**
- * Удар: `POST { initData, input: { aimX, aimY, power, curve } }`.
+ * Удар: `POST { initData, input: { kind, shape, aimX, aimY, power, curve }, mode, level }`.
  * Клиент присылает только параметры свайпа — гол или сейв решает сервер.
  */
 export async function POST(request: Request) {
@@ -27,7 +27,9 @@ export async function POST(request: Request) {
 
   try {
     const mode = body.mode === "freekick" ? "freekick" : "penalty";
-    const res = await takeShot(user.id, input, mode);
+    // Уровень вратаря влияет на исход и награду — доверять клиенту нельзя, проверяем список.
+    const level = KEEPER_LEVELS.includes(body.level as KeeperLevel) ? (body.level as KeeperLevel) : "amateur";
+    const res = await takeShot(user.id, input, mode, level);
     if (!res.ok) {
       return NextResponse.json(
         { error: res.reason },

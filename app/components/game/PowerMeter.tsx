@@ -4,18 +4,20 @@ import { useEffect, useRef } from "react";
 import { POWER_SWEET_MAX, POWER_SWEET_MIN } from "@/lib/game/penalty";
 import { haptic } from "@/lib/telegram/webApp";
 
-/** За сколько шкала заполняется от 0 до 100%. Дальше стоит на 100%. */
-export const POWER_FILL_MS = 1200;
+/** За сколько шкала проходит от 0 до 100%; потом столько же обратно — и так по кругу, как в FIFA. */
+export const POWER_FILL_MS = 1100;
 
-export function powerAt(chargingSince: number, now: number) {
-  return Math.min(1, Math.max(0, (now - chargingSince) / POWER_FILL_MS));
+/** Положение пульсирующей шкалы: 0 → 1 → 0 → … Нажатие ловит текущее значение. */
+export function powerAt(runningSince: number, now: number) {
+  const phase = (Math.max(0, now - runningSince) % (POWER_FILL_MS * 2)) / POWER_FILL_MS;
+  return phase <= 1 ? phase : 2 - phase;
 }
 
 /**
  * Вертикальная шкала силы: серая зона недобора, голубая рабочая, красная — перебор.
- * Пока палец держат, заливка растёт каждый кадр напрямую в DOM, без ререндера игры.
+ * Пока шкала бегает, заливка обновляется каждый кадр напрямую в DOM, без ререндера игры.
  */
-export default function PowerMeter({ chargingSince, locked }: { chargingSince: number | null; locked: number | null }) {
+export default function PowerMeter({ runningSince, locked }: { runningSince: number | null; locked: number | null }) {
   const fill = useRef<HTMLDivElement>(null);
   const label = useRef<HTMLSpanElement>(null);
 
@@ -24,23 +26,24 @@ export default function PowerMeter({ chargingSince, locked }: { chargingSince: n
       if (fill.current) fill.current.style.clipPath = `inset(${(1 - v) * 100}% 0 0 0)`;
       if (label.current) label.current.textContent = `${Math.round(v * 100)}%`;
     };
-    if (chargingSince == null) {
+    if (runningSince == null) {
       paint(locked ?? 0);
       return;
     }
     let raf = 0;
     let prev = 0;
     const tick = () => {
-      const v = powerAt(chargingSince, performance.now());
-      // Лёгкий щелчок при входе в рабочую зону и в перебор.
-      if ((prev < POWER_SWEET_MIN && v >= POWER_SWEET_MIN) || (prev < POWER_SWEET_MAX && v >= POWER_SWEET_MAX)) haptic.select();
+      const v = powerAt(runningSince, performance.now());
+      // Лёгкий щелчок на границах рабочей зоны — в обе стороны.
+      const crossed = (a: number) => (prev - a) * (v - a) < 0;
+      if (crossed(POWER_SWEET_MIN) || crossed(POWER_SWEET_MAX)) haptic.select();
       prev = v;
       paint(v);
       raf = requestAnimationFrame(tick);
     };
     tick();
     return () => cancelAnimationFrame(raf);
-  }, [chargingSince, locked]);
+  }, [runningSince, locked]);
 
   const zone = (from: number, to: number) => ({ bottom: `${from * 100}%`, height: `${(to - from) * 100}%` });
 

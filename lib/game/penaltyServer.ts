@@ -96,6 +96,7 @@ export async function takeShot(telegramId: number, input: ShotInput, mode: GameM
     play_date: playDate(),
     attempt,
     mode,
+    kind: input.kind,
     aim_x: input.aimX,
     aim_y: input.aimY,
     power: input.power,

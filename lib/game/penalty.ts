@@ -14,8 +14,19 @@ export const GOAL_HEIGHT = 2.44;
 export const PENALTY_DISTANCE = 11;
 export const BALL_RADIUS = 0.11;
 
+/**
+ * Тип удара — выбирает игрок перед ударом.
+ *  straight — прямой: без закрутки, низко и чуть быстрее;
+ *  curl — крученый: изгиб от дуги свайпа, вратарю сложнее читать;
+ *  lob — «парашют»: медленный навес высокой дугой, бьёт вратаря, который уже прыгнул;
+ *  knuckle — наклбол: без вращения, мяч «плавает» в полёте, вратарь читает плохо.
+ */
+export type ShotKind = "straight" | "curl" | "lob" | "knuckle";
+export const SHOT_KINDS: ShotKind[] = ["straight", "curl", "lob", "knuckle"];
+
 /** Что прислал клиент: сила со шкалы и прицел свайпом. Все значения ограничиваются на сервере. */
 export type ShotInput = {
+  kind: ShotKind;
   /** Прицел по ширине: -1 — левая штанга, 1 — правая, за пределами ±1 — мимо. */
   aimX: number;
   /** Прицел по высоте: 0 — по газону, 1 — под перекладину. */
@@ -46,7 +57,16 @@ export type ShotOutcome = {
   origin: KickSpot;
   wall: Wall | null;
   /** Куда реально прилетел мяч в плоскости ворот (с учётом неточности удара). */
-  ball: { x: number; y: number; flightMs: number; curveM: number; lift: number; pace: number };
+  ball: {
+    x: number;
+    y: number;
+    flightMs: number;
+    curveM: number;
+    lift: number;
+    pace: number;
+    /** Наклбол: амплитуда (м) и фаза «плавания» мяча в полёте. */
+    wobble?: { amp: number; phase: number };
+  };
   /** Прыжок вратаря: куда и когда он двинулся и где оказались его руки. */
   keeper: { startMs: number; startX: number; handX: number; handY: number; diveMs: number; guessed: boolean };
   /** «Девятка» — угол под перекладиной. */
@@ -64,6 +84,8 @@ export function sanitizeInput(raw: Partial<ShotInput>): ShotInput | null {
   const nums = [raw.aimX, raw.aimY, raw.power, raw.curve];
   if (nums.some((n) => typeof n !== "number" || !Number.isFinite(n))) return null;
   return {
+    // Старый клиент без типа удара бил «как свайпнул» — это крученый.
+    kind: SHOT_KINDS.includes(raw.kind as ShotKind) ? (raw.kind as ShotKind) : "curl",
     aimX: clamp(raw.aimX!, -1.6, 1.6),
     aimY: clamp(raw.aimY!, 0, 1.6),
     power: clamp(raw.power!, 0, 1),
@@ -120,11 +142,12 @@ export function powerProfile(power: number) {
  * Скорость мяча, м/с. Пенальти: недобор 9–15 (32–54 км/ч), рабочая зона 15–32
  * (54–115 км/ч), перебор до 33. Штрафной: 12–18, 18–32, до 33.
  */
-export function shotSpeed(power: number, freekick: boolean) {
+export function shotSpeed(power: number, freekick: boolean, kind: ShotKind = "curl") {
   const { g, weak, pace, over } = powerProfile(power);
   const base = freekick ? 18 : 15;
-  if (weak) return base - 6 + (g / POWER_SWEET_MIN) * 6;
-  return base + pace * (freekick ? 14 : 17) + over;
+  const speed = weak ? base - 6 + (g / POWER_SWEET_MIN) * 6 : base + pace * (freekick ? 14 : 17) + over;
+  // Парашют — мягкий подсечённый удар; прямой в подъём — чуть быстрее.
+  return kind === "lob" ? speed * 0.7 : kind === "straight" ? speed + 1 : speed;
 }
 
 /** Высота после недобора: слабый удар не поднимается и катится низом. */
@@ -138,21 +161,33 @@ function finalHeight(y: number, power: number, over: number) {
  * Дуга: мягкий удар выше навесом, со штрафного — чтобы перелететь стенку.
  * Недобор со штрафного так не работает: вялый удар не поднимается над стенкой.
  */
-function liftFor(freekick: boolean, aimY: number, power: number, y: number) {
-  if (!freekick) return Math.min(0.9, y * 0.25);
+function liftFor(freekick: boolean, aimY: number, power: number, y: number, kind: ShotKind) {
   const { pace, weak, g } = powerProfile(power);
+  if (kind === "lob") {
+    // Высокая дуга: пик над вратарём, мяч падает сверху.
+    const lift = (freekick ? 1.6 + aimY * 0.5 : 1.5) + (1 - pace) * 0.6;
+    return weak ? lift * (0.4 + 0.6 * (g / POWER_SWEET_MIN)) : lift;
+  }
+  // Прямой и наклбол идут ниже; со штрафного их всё же поднимают над стенкой (наклбол Роналду).
+  const flat = kind === "straight" || kind === "knuckle" ? (freekick ? 0.9 : 0.6) : 1;
+  if (!freekick) return Math.min(0.9, y * 0.25) * flat;
   const lift = 0.8 + aimY * 0.8 + (1 - pace) * 0.9;
-  return weak ? lift * (0.3 + 0.7 * (g / POWER_SWEET_MIN)) : lift;
+  return (weak ? lift * (0.3 + 0.7 * (g / POWER_SWEET_MIN)) : lift) * flat;
 }
 
 /** Прицел без случайности: куда полетит мяч, если удар получится идеально. */
+/** Насколько закрутка со свайпа переходит в изгиб траектории для каждого типа удара. */
+const CURVE_FACTOR: Record<ShotKind, number> = { straight: 0, curl: 1, lob: 0.4, knuckle: 0 };
+/** Разброс относительно крученого: мягкий парашют точнее, наклбол — капризнее. */
+const SPREAD_FACTOR: Record<ShotKind, number> = { straight: 0.9, curl: 1, lob: 1, knuckle: 1.3 };
+
 function shotPlan(input: ShotInput, mode: GameMode, spot: KickSpot) {
-  const { aimX, aimY, power, curve } = input;
+  const { aimX, aimY, power, curve, kind } = input;
   const freekick = mode === "freekick";
   const origin = freekick ? spot : PENALTY_SPOT;
   const { pace, over } = powerProfile(power);
-  const speed = shotSpeed(power, freekick);
-  const curveM = curve * (freekick ? 2.3 : 1.1);
+  const speed = shotSpeed(power, freekick, kind);
+  const curveM = curve * CURVE_FACTOR[kind] * (freekick ? 2.3 : 1.1);
   return {
     freekick,
     origin,
@@ -164,10 +199,11 @@ function shotPlan(input: ShotInput, mode: GameMode, spot: KickSpot) {
     y: aimY * GOAL_HEIGHT,
     // Неточность: чем сильнее бьёшь, тем больше разброс; перебор добавляет ещё. Со штрафного — дальше, разброс больше.
     spread:
-      (freekick ? 0.22 : 0.12) +
-      Math.pow(pace, 3) * (freekick ? 0.75 : 0.55) +
-      Math.abs(curve) * 0.1 +
-      over * (freekick ? 0.5 : 0.35),
+      ((freekick ? 0.22 : 0.12) +
+        Math.pow(pace, 3) * (freekick ? 0.75 : 0.55) +
+        Math.abs(curveM) * 0.05 +
+        over * (freekick ? 0.5 : 0.35)) *
+      SPREAD_FACTOR[kind],
   };
 }
 
@@ -178,7 +214,8 @@ function shotPlan(input: ShotInput, mode: GameMode, spot: KickSpot) {
 export function previewPath(input: ShotInput, mode: GameMode, spot: KickSpot, fraction = 0.7, steps = 24) {
   const plan = shotPlan(input, mode, spot);
   const y = finalHeight(plan.y, input.power, plan.over);
-  const ball = { x: plan.x, y, curveM: plan.curveM, lift: liftFor(plan.freekick, input.aimY, input.power, y) };
+  // Наклбол в прицеле без «плавания»: куда его понесёт — неизвестно до удара.
+  const ball = { x: plan.x, y, curveM: plan.curveM, lift: liftFor(plan.freekick, input.aimY, input.power, y, input.kind) };
   return Array.from({ length: steps + 1 }, (_, i) => trajectoryPoint({ origin: plan.origin, ball }, (i / steps) * fraction));
 }
 
@@ -202,13 +239,15 @@ export function flightTimeAt(pathFraction: number, pace: number) {
 }
 
 export function simulateShot(input: ShotInput, rand: Random, mode: GameMode = "penalty", spot: KickSpot = PENALTY_SPOT): ShotOutcome {
-  const { aimY, power, curve } = input;
+  const { aimY, power, kind } = input;
   const plan = shotPlan(input, mode, spot);
   const { freekick, origin, pace, flightMs, curveM, spread } = plan;
 
   let x = plan.x + gaussian(rand) * spread;
   let y = finalHeight(plan.y + gaussian(rand) * spread * 0.7, power, plan.over);
-  const lift = liftFor(freekick, aimY, power, y);
+  const lift = liftFor(freekick, aimY, power, y, kind);
+  // Наклбол «плавает» в середине полёта; к воротам приходит в точку, но вратарь его читает плохо.
+  const wobble = kind === "knuckle" ? { amp: round(0.3 + rand() * 0.45), phase: round(rand() * Math.PI * 2) } : undefined;
 
   const nearPost = Math.abs(Math.abs(x) - GOAL_HALF_WIDTH) < BALL_RADIUS * 1.05 && y < GOAL_HEIGHT + BALL_RADIUS;
   const nearBar = Math.abs(y - GOAL_HEIGHT) < BALL_RADIUS * 1.05 && Math.abs(x) < GOAL_HALF_WIDTH + BALL_RADIUS;
@@ -218,11 +257,11 @@ export function simulateShot(input: ShotInput, rand: Random, mode: GameMode = "p
   let blockedByWall = false;
   if (wall) {
     const t = (origin.z - wall.z) / origin.z;
-    const p = trajectoryPoint({ origin, ball: { x, y, curveM, lift } }, t);
+    const p = trajectoryPoint({ origin, ball: { x, y, curveM, lift, wobble } }, t);
     blockedByWall = Math.abs(p.x - wall.x) < wall.halfWidth + BALL_RADIUS && p.y < wall.top + BALL_RADIUS;
   }
 
-  const keeper = keeperDive({ x, y, flightMs, curve, power: pace, freekick, startX: wall ? -Math.sign(wall.x || 1) * 0.9 : 0 }, rand);
+  const keeper = keeperDive({ x, y, flightMs, curveM, kind, power: pace, freekick, startX: wall ? -Math.sign(wall.x || 1) * 0.9 : 0 }, rand);
 
   let result: ShotResult;
   if (blockedByWall) result = "wall";
@@ -244,7 +283,7 @@ export function simulateShot(input: ShotInput, rand: Random, mode: GameMode = "p
     result,
     origin,
     wall,
-    ball: { x: round(x), y: round(y), flightMs, curveM: round(curveM), lift: round(lift), pace: round(pace) },
+    ball: { x: round(x), y: round(y), flightMs, curveM: round(curveM), lift: round(lift), pace: round(pace), ...(wobble ? { wobble } : {}) },
     keeper: {
       startMs: keeper.startMs,
       startX: keeper.startX,
@@ -269,7 +308,7 @@ const round = (v: number) => Math.round(v * 100) / 100;
  * Сейв — если к моменту прилёта мяча руки успели оказаться рядом.
  */
 function keeperDive(
-  shot: { x: number; y: number; flightMs: number; curve: number; power: number; freekick: boolean; startX: number },
+  shot: { x: number; y: number; flightMs: number; curveM: number; kind: ShotKind; power: number; freekick: boolean; startX: number },
   rand: Random,
 ) {
   const DIVE_SPEED = 7.4; // м/с вбок
@@ -291,7 +330,11 @@ function keeperDive(
     startMs = 0;
   } else {
     const reactionMs = (shot.freekick ? 360 : 150) + rand() * 90;
-    const readError = 0.18 + Math.pow(shot.power, 2) * 0.5 + Math.abs(shot.curve) * (shot.freekick ? 0.8 : 0.3) + (shot.freekick ? 0.15 : 0);
+    // Крученый и особенно наклбол вратарь читает с ошибкой; прямой — лучше всех.
+    const curveErr = Math.min(1, Math.abs(shot.curveM) / (shot.freekick ? 2.3 : 1.1)) * (shot.freekick ? 0.8 : 0.3);
+    // Медленный парашют вратарь видит хорошо — его козырь только против прыгнувшего вратаря.
+    const kindErr = shot.kind === "knuckle" ? 0.3 : shot.kind === "lob" ? -0.08 : 0;
+    const readError = Math.max(0.1, 0.18 + Math.pow(shot.power, 2) * 0.5 + curveErr + kindErr + (shot.freekick ? 0.15 : 0));
     targetX = shot.x + gaussian(rand) * readError;
     targetY = shot.y + gaussian(rand) * readError * 0.6;
     startMs = reactionMs;
@@ -308,9 +351,11 @@ function keeperDive(
   const handY = clamp(Math.min(targetY, 0.9 + RISE_SPEED * available), 0.2, maxY);
 
   const dist = Math.hypot(handX - shot.x, handY - shot.y);
-  // Мяч в корпус (центр, невысоко) вратарь берёт почти всегда.
-  const bodyBlock = Math.abs(shot.x - shot.startX) < 0.55 && shot.y < 1.9;
-  const saves = bodyBlock || dist < HAND_RADIUS;
+  // Мяч в корпус (центр, невысоко) вратарь берёт почти всегда. Парашют сверху — не корпусом: его надо достать руками.
+  const bodyBlock = shot.kind !== "lob" && Math.abs(shot.x - shot.startX) < 0.55 && shot.y < 1.9;
+  // Под парашютом вратарь, который уже прыгнул в угол, отыграть назад не успевает.
+  const beatenByLob = shot.kind === "lob" && guessed && Math.abs(handX - shot.x) > 0.8;
+  const saves = !beatenByLob && (bodyBlock || dist < HAND_RADIUS);
 
   const diveMs = Math.round(Math.max(120, Math.min(available * 1000, (reach / DIVE_SPEED) * 1000 + 80)));
   return { handX, handY, startX: shot.startX, startMs: Math.round(startMs), diveMs, guessed, saves };
@@ -318,17 +363,22 @@ function keeperDive(
 
 /** Точка на траектории мяча в момент t (0..1): от точки удара к воротам, с изгибом и дугой. */
 function trajectoryPoint(
-  o: { origin: KickSpot; ball: { x: number; y: number; curveM: number; lift: number } },
+  o: { origin: KickSpot; ball: { x: number; y: number; curveM: number; lift: number; wobble?: { amp: number; phase: number } } },
   t: number,
 ) {
   const k = clamp(t, 0, 1);
-  const { x, y, curveM, lift } = o.ball;
+  const { x, y, curveM, lift, wobble } = o.ball;
   // Боковой изгиб сильнее в середине полёта — как у закрученного удара.
   const bend = Math.sin(Math.PI * k) * curveM * 0.6;
   const arc = Math.sin(Math.PI * k) * lift;
+  // Наклбол: мяч «плавает» вбок и вверх-вниз, к концу полёта возвращаясь на курс.
+  const sway = wobble ? Math.sin(Math.PI * k) * wobble.amp : 0;
+  const phase = wobble?.phase ?? 0;
+  const wx = sway * Math.sin(Math.PI * 3 * k + phase);
+  const wy = sway * 0.5 * Math.cos(Math.PI * 2.5 * k + phase);
   return {
-    x: o.origin.x + (x - o.origin.x) * k + bend,
-    y: BALL_RADIUS + (y - BALL_RADIUS) * k + arc,
+    x: o.origin.x + (x - o.origin.x) * k + bend + wx,
+    y: BALL_RADIUS + (y - BALL_RADIUS) * k + arc + wy,
     z: o.origin.z * (1 - k),
   };
 }

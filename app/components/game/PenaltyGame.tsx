@@ -18,10 +18,12 @@ import {
   PENALTY_SPOT,
   POWER_SWEET_MAX,
   POWER_SWEET_MIN,
+  SHOT_KINDS,
   simulateShot,
   type GameMode,
   type KickSpot,
   type ShotInput,
+  type ShotKind,
   type ShotOutcome,
   type ShotResult,
 } from "@/lib/game/penalty";
@@ -34,7 +36,7 @@ const PenaltyScene = dynamic(() => import("@/app/components/game/PenaltyScene"),
   loading: () => <div className="absolute inset-0 bg-background" />,
 });
 
-/** power — держим палец и набираем силу, aim — ведём траекторию, shooting — удар. */
+/** power — ловим силу на пульсирующей шкале, aim — ведём траекторию, shooting — удар. */
 type Phase = "intro" | "power" | "aim" | "shooting" | "result" | "summary";
 
 type TodayShot = { attempt: number; result: ShotResult; points: number; topCorner: boolean };
@@ -52,6 +54,13 @@ const RESULT_COPY: Record<ShotResult, { title: string; tone: string }> = {
 };
 
 const MODE_LABEL: Record<GameMode, string> = { penalty: "Пенальти", freekick: "Штрафной" };
+
+const KIND_LABEL: Record<ShotKind, { title: string; hint: string }> = {
+  straight: { title: "Прямой", hint: "Быстро и низко, без закрутки" },
+  curl: { title: "Крученый", hint: "Дуга свайпа — закрутка" },
+  lob: { title: "Парашют", hint: "Навес над вратарём, который уже прыгнул" },
+  knuckle: { title: "Наклбол", hint: "Мяч плавает — вратарь не читает" },
+};
 
 function randomSpot(): KickSpot {
   return freeKickSpotFromSeed(Math.floor(Math.random() * 2 ** 31));
@@ -72,8 +81,8 @@ async function postJson<T>(url: string, body: unknown): Promise<{ status: number
 
 type SwipePoint = { x: number; y: number; t: number };
 
-/** Короче — это случайное касание, а не набор силы. */
-const MIN_CHARGE_MS = 80;
+/** Раньше этого шкалу поймать нельзя: чтобы случайное касание при старте не било «в ноль». */
+const MIN_CHARGE_MS = 120;
 
 /**
  * Свайп прицела → параметры удара. Конец свайпа проецируется на плоскость ворот:
@@ -83,6 +92,7 @@ const MIN_CHARGE_MS = 80;
 function swipeToAim(
   points: SwipePoint[],
   power: number,
+  kind: ShotKind,
   mode: GameMode,
   goalPointAt: PenaltySceneHandle["goalPointAt"],
 ): ShotInput | null {
@@ -101,9 +111,11 @@ function swipeToAim(
   const cross = ((b.x - a.x) * (mid.y - a.y) - (b.y - a.y) * (mid.x - a.x)) / Math.max(1, dist);
   const curve = Math.max(-1, Math.min(1, -cross / (dist * 0.18)));
   // Закрутка сносит мяч вбок (см. shotPlan) — прицел компенсирует снос, чтобы мяч пришёл под палец.
-  const drift = curve * (mode === "freekick" ? 2.3 : 1.1) * 0.35;
+  const curveFactor = kind === "curl" ? 1 : kind === "lob" ? 0.4 : 0;
+  const drift = curve * curveFactor * (mode === "freekick" ? 2.3 : 1.1) * 0.35;
 
   return {
+    kind,
     aimX: Math.max(-1.6, Math.min(1.6, (target.x - drift) / GOAL_HALF_WIDTH)),
     aimY: Math.max(0, Math.min(1.6, target.y / GOAL_HEIGHT)),
     power,
@@ -126,9 +138,10 @@ export default function PenaltyGame() {
   const [notice, setNotice] = useState<string | null>(null);
   const [trail, setTrail] = useState<{ x: number; y: number }[]>([]);
   const swipe = useRef<SwipePoint[]>([]);
-  /** Когда начали держать палец (фаза power) и какая сила зафиксирована. */
-  const [chargingSince, setChargingSince] = useState<number | null>(null);
+  /** Когда шкала силы запустилась (фаза power) и какая сила поймана. */
+  const [gaugeSince, setGaugeSince] = useState<number | null>(null);
   const [power, setPower] = useState<number | null>(null);
+  const [kind, setKind] = useState<ShotKind>("curl");
   const [inTelegram, setInTelegram] = useState(false);
 
   const exit = useCallback(() => router.push("/"), [router]);
@@ -180,6 +193,7 @@ export default function PenaltyGame() {
     scene.current?.reset();
     setLast(null);
     setPower(null);
+    setGaugeSince(performance.now());
     setPhase("power");
   };
 
@@ -232,13 +246,20 @@ export default function PenaltyGame() {
     });
   };
 
+  /** Поймать силу на бегущей шкале. */
+  const catchPower = () => {
+    if (gaugeSince == null) return;
+    const now = performance.now();
+    if (now - gaugeSince < MIN_CHARGE_MS) return;
+    const g = powerAt(gaugeSince, now);
+    setGaugeSince(null);
+    setPower(g);
+    haptic.notify(g < POWER_SWEET_MIN || g > POWER_SWEET_MAX ? "warning" : "success");
+    setPhase("aim");
+  };
+
   const onPointerDown = (e: React.PointerEvent) => {
-    if (phase === "power") {
-      setChargingSince(performance.now());
-      haptic.impact("light");
-      (e.target as Element).setPointerCapture?.(e.pointerId);
-      return;
-    }
+    if (phase === "power") return catchPower();
     if (phase !== "aim") return;
     // Прицел ведём от мяча: начинать свайп можно в нижней части экрана.
     if (e.clientY < window.innerHeight * 0.45) return;
@@ -251,31 +272,19 @@ export default function PenaltyGame() {
     swipe.current.push({ x: e.clientX, y: e.clientY, t: performance.now() });
     setTrail((tr) => [...tr.slice(-24), { x: e.clientX, y: e.clientY }]);
     const handle = scene.current;
-    if (handle) handle.setAimPreview(swipeToAim(swipe.current, power, mode, handle.goalPointAt));
-  };
-  const lockPower = () => {
-    if (chargingSince == null) return;
-    const now = performance.now();
-    setChargingSince(null);
-    if (now - chargingSince < MIN_CHARGE_MS) return;
-    const g = powerAt(chargingSince, now);
-    setPower(g);
-    haptic.notify(g < POWER_SWEET_MIN || g > POWER_SWEET_MAX ? "warning" : "success");
-    setPhase("aim");
+    if (handle) handle.setAimPreview(swipeToAim(swipe.current, power, kind, mode, handle.goalPointAt));
   };
   const onPointerUp = () => {
-    if (phase === "power") return lockPower();
     if (phase !== "aim" || !swipe.current.length || power == null) return;
     const handle = scene.current;
-    const input = handle ? swipeToAim(swipe.current, power, mode, handle.goalPointAt) : null;
+    const input = handle ? swipeToAim(swipe.current, power, kind, mode, handle.goalPointAt) : null;
     swipe.current = [];
     handle?.setAimPreview(null);
     window.setTimeout(() => setTrail([]), 180);
     if (input) void shoot(input);
   };
-  /** Telegram может отменить жест (системный свайп): силу фиксируем, прицел — сбрасываем без удара. */
+  /** Telegram может отменить жест (системный свайп): прицел сбрасываем без удара. */
   const onPointerCancel = () => {
-    if (phase === "power") return lockPower();
     swipe.current = [];
     scene.current?.setAimPreview(null);
     setTrail([]);
@@ -291,6 +300,7 @@ export default function PenaltyGame() {
       void loadLeaders();
       return;
     }
+    setGaugeSince(performance.now());
     setPhase("power");
   };
 
@@ -319,7 +329,7 @@ export default function PenaltyGame() {
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0 }}
           >
-            <PowerMeter chargingSince={chargingSince} locked={power} />
+            <PowerMeter runningSince={gaugeSince} locked={power} />
           </motion.div>
         )}
       </AnimatePresence>
@@ -387,10 +397,30 @@ export default function PenaltyGame() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
           >
+            <div className="pointer-events-auto mb-4 flex gap-1.5 rounded-full bg-background/70 p-1 backdrop-blur" role="radiogroup" aria-label="Тип удара">
+              {SHOT_KINDS.map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  role="radio"
+                  aria-checked={kind === k}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={() => {
+                    if (kind !== k) haptic.select();
+                    setKind(k);
+                  }}
+                  className={`t-caption rounded-full px-3 py-1.5 font-medium transition-colors ${
+                    kind === k ? "bg-accent text-background" : "text-foreground/80"
+                  }`}
+                >
+                  {KIND_LABEL[k].title}
+                </button>
+              ))}
+            </div>
             <p className="t-small rounded-full bg-background/70 px-4 py-2 text-foreground backdrop-blur">
-              {chargingSince == null ? "Зажми экран, чтобы набрать силу" : "Отпусти в голубой зоне"}
+              Нажми, когда шкала в голубой зоне
             </p>
-            <p className="t-caption mt-2 text-foreground/70">Слабо — мяч катится · до упора — теряешь точность</p>
+            <p className="t-caption mt-2 text-foreground/70">{KIND_LABEL[kind].hint}</p>
           </motion.div>
         )}
         {phase === "aim" && (

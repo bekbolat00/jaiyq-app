@@ -532,12 +532,25 @@ function matteUmetovMaterial(source: Material): Material {
  * Настоящее исправление — перевесить риг в Blender.
  */
 const CLAVICLE_RETURN = 0.55;
-const CLAVICLE_BONES = ["mixamorigLeftShoulder", "mixamorigRightShoulder"];
+/** Плечо — дочерняя кость ключицы: возвращая ключицу, компенсируем плечо, иначе руки прижимаются к телу. */
+const CLAVICLE_BONES: [string, string, number][] = [
+  ["mixamorigLeftShoulder", "mixamorigLeftArm", 1],
+  ["mixamorigRightShoulder", "mixamorigRightArm", -1],
+];
+/** Небольшое разведение рук от корпуса, градусы (вокруг локальной оси плеча). */
+const ARM_SPREAD_DEG = 8;
 
-type Clavicle = { bone: Object3D; rest: Quaternion };
+type Clavicle = { bone: Object3D; arm: Object3D; rest: Quaternion; spread: Quaternion };
+const scratchQ = new Quaternion();
 
 function relaxClavicles(clavicles: Clavicle[]) {
-  for (const c of clavicles) c.bone.quaternion.slerp(c.rest, CLAVICLE_RETURN);
+  for (const c of clavicles) {
+    scratchQ.copy(c.bone.quaternion);
+    c.bone.quaternion.slerp(c.rest, CLAVICLE_RETURN);
+    // Плечо в мире остаётся как в клипе: armLocal' = inv(clav') · clav · armLocal.
+    c.arm.quaternion.premultiply(scratchQ.premultiply(c.bone.quaternion.clone().invert()));
+    c.arm.quaternion.multiply(c.spread);
+  }
 }
 
 type ShooterPhase = "idle" | "run" | "kick" | "recover";
@@ -591,9 +604,12 @@ function ShooterModel({ timeline, from, to, yaw }: {
     // Время удара ведём вручную — чтобы касание совпало с вылетом мяча.
     kick.timeScale = 0;
     // Поза привязки ключиц — до первого кадра анимации.
-    const clavicles = CLAVICLE_BONES.flatMap((name) => {
+    const clavicles = CLAVICLE_BONES.flatMap(([name, armName, side]) => {
       const bone = model.getObjectByName(name);
-      return bone ? [{ bone, rest: bone.quaternion.clone() }] : [];
+      const arm = model.getObjectByName(armName);
+      if (!bone || !arm) return [];
+      const spread = new Quaternion().setFromAxisAngle(new Vector3(0, 0, 1), (-ARM_SPREAD_DEG * side * Math.PI) / 180);
+      return [{ bone, arm, rest: bone.quaternion.clone(), spread }];
     });
     return { mixer, idle: action(CLIP_IDLE), run: action(CLIP_RUN), kick, clavicles };
   }, [gltf, model]);

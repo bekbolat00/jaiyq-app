@@ -62,8 +62,8 @@ const KIND_LABEL: Record<ShotKind, string> = { straight: "Прямой", curl: "
 
 const LEVEL_LABEL: Record<KeeperLevel, { title: string; hint: string }> = {
   junior: { title: "Юниор", hint: "Медленно реагирует и часто не дотягивается. Очки — как есть" },
-  amateur: { title: "Любитель", hint: "Крепкий вратарь. Очки ×2, монеты ×1.5" },
-  pro: { title: "Проф", hint: "Читает закрутку и достаёт углы. Очки ×3, монеты ×2" },
+  amateur: { title: "Любитель", hint: "Крепкий вратарь: угадывает сторону. Очки ×2, монеты ×1.5" },
+  pro: { title: "Проф", hint: "Ждёт до последнего и достаёт углы — забить трудно. Очки ×7, монеты ×3" },
 };
 const LEVEL_KEY = "jaiyq.game.keeperLevel";
 

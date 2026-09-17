@@ -67,7 +67,8 @@ const KEEPER_SKILL: Record<KeeperLevel, {
 }> = {
   junior: { guess: 0.22, reactionMs: [200, 110], read: 0.28, diveSpeed: 6.5, reach: 0.54, tricky: 1.25 },
   amateur: { guess: 0.3, reactionMs: [150, 90], read: 0.18, diveSpeed: 7.4, reach: 0.6, tricky: 1 },
-  pro: { guess: 0.36, reactionMs: [115, 75], read: 0.12, diveSpeed: 8.1, reach: 0.65, tricky: 0.7 },
+  // Профи почти не угадывает наугад: он ждёт и успевает среагировать — это и делает его цепким.
+  pro: { guess: 0.15, reactionMs: [95, 58], read: 0.08, diveSpeed: 9.7, reach: 0.75, tricky: 0.55 },
 };
 
 /**
@@ -77,7 +78,8 @@ const KEEPER_SKILL: Record<KeeperLevel, {
 const LEVEL_REWARD: Record<KeeperLevel, { points: number; coins: number }> = {
   junior: { points: 1, coins: 1 },
   amateur: { points: 2, coins: 1.5 },
-  pro: { points: 3, coins: 2 },
+  // Против профи забивают редко, поэтому гол дороже: иначе уровень никто не выберет.
+  pro: { points: 7, coins: 3 },
 };
 
 /** Точка удара: x — поперёк поля, z — расстояние до линии ворот. */

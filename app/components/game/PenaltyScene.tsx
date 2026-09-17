@@ -1,19 +1,28 @@
 "use client";
 
 import { PerspectiveCamera } from "@react-three/drei";
-import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef } from "react";
+import { Canvas, useFrame, useLoader, useThree } from "@react-three/fiber";
+import { forwardRef, Suspense, useEffect, useImperativeHandle, useMemo, useRef } from "react";
 import {
+  AnimationAction,
+  AnimationClip,
+  AnimationMixer,
   CanvasTexture,
   Color,
   DoubleSide,
   Group,
+  LoopOnce,
+  Material,
   Mesh,
+  MeshPhysicalMaterial,
+  MeshStandardMaterial,
   PlaneGeometry,
   RepeatWrapping,
   SRGBColorSpace,
   Vector3,
 } from "three";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js";
 import {
   BALL_RADIUS,
   GOAL_HALF_WIDTH,
@@ -36,8 +45,7 @@ const VISIBLE_HALF_WIDTH = 5.4;
 const RUN_MS = 560;
 const CONTACT_MS = RUN_MS + 70;
 
-/** Форма Жайыка (по фото с сайта клуба) и соперника. */
-const ZHAIYQ_KIT = { shirt: "#86d0f2", trim: "#0e1f73", shorts: "#0e1f73", socks: "#86d0f2" };
+/** Форма соперника (стенка на штрафном). */
 const RIVAL_KIT = { shirt: "#c0262d", trim: "#1f2937", shorts: "#f3f4f6", socks: "#c0262d" };
 
 export type PenaltySceneHandle = {
@@ -289,57 +297,12 @@ function frameFor(spot: KickSpot) {
   return { f, r, yaw: Math.atan2(f.x, f.z) };
 }
 
-type Kit = typeof ZHAIYQ_KIT;
+type Kit = typeof RIVAL_KIT;
 
-/** Номер и фамилия на спине — текстура из canvas. */
-function useBackPrint(surname: string, number: string, kit: Kit) {
-  return useMemo(
-    () =>
-      makeCanvasTexture(
-        (ctx, w, h) => {
-          ctx.fillStyle = kit.shirt;
-          ctx.fillRect(0, 0, w, h);
-          ctx.fillStyle = kit.trim;
-          ctx.textAlign = "center";
-          ctx.font = "700 44px Geist, Arial, sans-serif";
-          ctx.fillText(surname.toUpperCase().slice(0, 12), w / 2, 62);
-          ctx.font = "800 150px Geist, Arial, sans-serif";
-          ctx.fillText(number, w / 2, 212);
-        },
-        256,
-        256,
-      ),
-    [surname, number, kit],
-  );
-}
-
-/** Узлы скелета футболиста — передаются сцене, анимация двигает их в useFrame. */
-type RigNodes = { root: Group; legL: Group; legR: Group; armL: Group; armR: Group; torso: Group };
-
-/** Стилизованный футболист: ноги и руки на шарнирах, форма, номер на спине. */
-function Footballer({ rigRef, kit, surname, number, skin = "#c89a78", hair = "#1c1917" }: {
-  rigRef?: React.RefObject<RigNodes | null>;
-  kit: Kit;
-  surname?: string;
-  number?: string;
-  skin?: string;
-  hair?: string;
-}) {
-  const print = useBackPrint(surname ?? "", number ?? "", kit);
-  const root = useRef<Group>(null);
-  const legL = useRef<Group>(null);
-  const legR = useRef<Group>(null);
-  const armL = useRef<Group>(null);
-  const armR = useRef<Group>(null);
-  const torso = useRef<Group>(null);
-
-  useEffect(() => {
-    if (!rigRef || !root.current || !legL.current || !legR.current || !armL.current || !armR.current || !torso.current) return;
-    rigRef.current = { root: root.current, legL: legL.current, legR: legR.current, armL: armL.current, armR: armR.current, torso: torso.current };
-  }, [rigRef]);
-
-  const leg = (ref: React.RefObject<Group | null>, x: number) => (
-    <group ref={ref} position={[x, 0.92, 0]}>
+/** Стилизованный футболист соперника для стенки. */
+function Footballer({ kit, skin = "#c89a78", hair = "#1c1917" }: { kit: Kit; skin?: string; hair?: string }) {
+  const leg = (x: number) => (
+    <group position={[x, 0.92, 0]}>
       <mesh position={[0, -0.2, 0]} castShadow>
         <capsuleGeometry args={[0.085, 0.26, 6, 12]} />
         <meshStandardMaterial color={kit.shorts} roughness={0.7} />
@@ -354,8 +317,8 @@ function Footballer({ rigRef, kit, surname, number, skin = "#c89a78", hair = "#1
       </mesh>
     </group>
   );
-  const arm = (ref: React.RefObject<Group | null>, x: number) => (
-    <group ref={ref} position={[x, 1.42, 0]}>
+  const arm = (x: number) => (
+    <group position={[x, 1.42, 0]}>
       <mesh position={[0, -0.14, 0]} castShadow>
         <capsuleGeometry args={[0.058, 0.14, 6, 12]} />
         <meshStandardMaterial color={kit.shirt} roughness={0.65} />
@@ -367,20 +330,14 @@ function Footballer({ rigRef, kit, surname, number, skin = "#c89a78", hair = "#1
     </group>
   );
   return (
-    <group ref={root}>
-      {leg(legL, -0.11)}
-      {leg(legR, 0.11)}
-      <group ref={torso} position={[0, 0.92, 0]}>
+    <group>
+      {leg(-0.11)}
+      {leg(0.11)}
+      <group position={[0, 0.92, 0]}>
         <mesh position={[0, 0.3, 0]} castShadow>
           <capsuleGeometry args={[0.2, 0.32, 8, 16]} />
           <meshStandardMaterial color={kit.shirt} roughness={0.65} />
         </mesh>
-        {number && (
-          <mesh position={[0, 0.34, -0.205]} rotation={[0, Math.PI, 0]}>
-            <planeGeometry args={[0.32, 0.36]} />
-            <meshStandardMaterial map={print} roughness={0.7} />
-          </mesh>
-        )}
         <mesh position={[0, 0.66, 0]} castShadow>
           <sphereGeometry args={[0.115, 20, 20]} />
           <meshStandardMaterial color={skin} roughness={0.8} />
@@ -390,8 +347,8 @@ function Footballer({ rigRef, kit, surname, number, skin = "#c89a78", hair = "#1
           <meshStandardMaterial color={hair} roughness={0.9} />
         </mesh>
       </group>
-      {arm(armL, -0.27)}
-      {arm(armR, 0.27)}
+      {arm(-0.27)}
+      {arm(0.27)}
     </group>
   );
 }
@@ -490,15 +447,173 @@ function afterPoint(o: ShotOutcome): Vector3 {
   }
 }
 
-type SceneProps = { mode: GameMode; spot: KickSpot; shooter: { surname: string; number: string } };
+/** 3D-модель игрока Жайыка из Meshy (Умбетов, №8) со скелетом Mixamo и анимациями. */
+const SHOOTER_MODEL_URL = "/models/players/umetov/umetov-final.glb";
+const CLIP_IDLE = "Idle_9";
+const CLIP_RUN = "Run_03";
+const CLIP_KICK = "Kick_a_Soccer_Ball";
 
-function SceneContent({ handleRef, mode, spot, shooter }: SceneProps & { handleRef: React.Ref<PenaltySceneHandle> }) {
+/*
+ * Тайминги удара сняты с клипа Kick_a_Soccer_Ball (1.71 с): к 0.30 с опорная
+ * левая нога уже у мяча, правая проходит мяч на 0.48 с. Клип подключается
+ * с 0.30 с, поэтому касание приходится ровно на CONTACT_MS, как и раньше.
+ */
+const KICK_FROM_S = 0.3;
+const KICK_CONTACT_S = 0.48;
+/** Пока сервер не ответил, нога замирает в замахе чуть до касания. */
+const KICK_HOLD_S = 0.46;
+const KICK_START_MS = CONTACT_MS - (KICK_CONTACT_S - KICK_FROM_S) * 1000;
+/** Правый носок в момент касания — на 0.47 м впереди корня модели. */
+const KICK_BALL_OFFSET = 0.47;
+const FADE_RUN_S = 0.12;
+const FADE_KICK_S = 0.1;
+const FADE_IDLE_S = 0.3;
+
+/**
+ * Материал модели экспортирован «засвеченным»: нет карты metallic/roughness
+ * (по glTF это металл 1 / шероховатость 1), текстура стоит ещё и свечением
+ * на полную, specularColorFactor = 2. Правим копию материала при загрузке —
+ * текстура и UV остаются, GLB и кэш загрузчика не трогаем. false — как в файле.
+ * В umetov-final.glb уже вшита насыщенная baseColor (WebP) из статичной модели.
+ */
+const FIX_UMETOV_MATERIAL = true;
+
+function matteUmetovMaterial(source: Material): Material {
+  if (!(source instanceof MeshStandardMaterial)) return source;
+  const m = source.clone();
+  m.metalness = 0;
+  m.roughness = 0.75;
+  m.metalnessMap = null;
+  m.roughnessMap = null;
+  m.emissive.setRGB(0, 0, 0);
+  m.emissiveMap = null;
+  m.emissiveIntensity = 0;
+  if (m instanceof MeshPhysicalMaterial) m.specularColor.setRGB(1, 1, 1);
+  m.needsUpdate = true;
+  return m;
+}
+
+type ShooterPhase = "idle" | "run" | "kick" | "recover";
+
+/** Ручная перемотка клипа (у AnimationAction нет сеттера времени). */
+function seekAction(action: AnimationAction, seconds: number) {
+  action.time = Math.min(seconds, action.getClip().duration);
+}
+
+/**
+ * Бьющий: GLB как есть — оригинальные материал, текстура и геометрия.
+ * Idle крутится по умолчанию; после свайпа Run → Kick → снова Idle.
+ * Клипы «на месте» (корень возвращается в исходную точку), поэтому модель
+ * двигает код: от точки ожидания к мячу по прежней траектории разбега.
+ */
+function ShooterModel({ timeline, from, to, yaw }: {
+  timeline: React.RefObject<Timeline | null>;
+  from: Vector3;
+  to: Vector3;
+  yaw: number;
+}) {
+  const gltf = useLoader(GLTFLoader, SHOOTER_MODEL_URL);
+  const root = useRef<Group>(null);
+  const phase = useRef<ShooterPhase>("idle");
+  const model = useMemo(() => {
+    const clone = cloneSkinned(gltf.scene);
+    clone.traverse((o) => {
+      if ((o as Mesh).isMesh) {
+        o.castShadow = true;
+        // Границы скиннед-меша считаются по позе привязки — в анимации его может «отсечь».
+        o.frustumCulled = false;
+        const mesh = o as Mesh;
+        if (FIX_UMETOV_MATERIAL) {
+          mesh.material = Array.isArray(mesh.material) ? mesh.material.map(matteUmetovMaterial) : matteUmetovMaterial(mesh.material);
+        }
+      }
+    });
+    return clone;
+  }, [gltf]);
+
+  const rig = useMemo(() => {
+    const mixer = new AnimationMixer(model);
+    const action = (name: string) => {
+      const clip = AnimationClip.findByName(gltf.animations, name);
+      if (!clip) throw new Error(`В ${SHOOTER_MODEL_URL} нет клипа ${name}`);
+      return mixer.clipAction(clip);
+    };
+    const kick = action(CLIP_KICK);
+    kick.setLoop(LoopOnce, 1);
+    kick.clampWhenFinished = true;
+    // Время удара ведём вручную — чтобы касание совпало с вылетом мяча.
+    kick.timeScale = 0;
+    return { mixer, idle: action(CLIP_IDLE), run: action(CLIP_RUN), kick };
+  }, [gltf, model]);
+
+  useEffect(() => {
+    rig.idle.play();
+    return () => {
+      rig.mixer.stopAllAction();
+    };
+  }, [rig]);
+
+  useFrame((_, delta) => {
+    const g = root.current;
+    if (!g) return;
+    const { mixer, idle, run, kick } = rig;
+    const current = { idle, run, kick, recover: idle }[phase.current];
+    const go = (to: ShooterPhase, next: AnimationAction, fade: number) => {
+      next.reset().play();
+      if (next !== current) next.crossFadeFrom(current, fade, false);
+      phase.current = to;
+    };
+
+    const tl = timeline.current;
+    g.rotation.set(0, yaw, 0);
+    if (!tl) {
+      // Новый удар: сразу в позу ожидания у точки разбега.
+      if (phase.current !== "idle") {
+        mixer.stopAllAction();
+        idle.reset().play();
+        phase.current = "idle";
+      }
+      g.position.copy(from);
+      mixer.update(delta);
+      return;
+    }
+
+    const since = performance.now() - tl.runStart;
+    if (since < KICK_START_MS) {
+      if (phase.current === "idle") go("run", run, FADE_RUN_S);
+      const u = since / KICK_START_MS;
+      g.position.lerpVectors(from, to, 1 - (1 - u) * (1 - u));
+    } else {
+      if (phase.current === "idle" || phase.current === "run") go("kick", kick, FADE_KICK_S);
+      g.position.copy(to);
+      // В фазе recover клип продолжает идти, пока плавно уходит в Idle.
+      if (phase.current === "kick" || phase.current === "recover") {
+        const t =
+          tl.flightStart != null
+            ? KICK_CONTACT_S + (performance.now() - tl.flightStart) / 1000
+            : Math.min(KICK_FROM_S + (since - KICK_START_MS) / 1000, tl.outcome ? KICK_CONTACT_S : KICK_HOLD_S);
+        seekAction(kick, t);
+        if (phase.current === "kick" && t >= kick.getClip().duration - FADE_IDLE_S) go("recover", idle, FADE_IDLE_S);
+      }
+    }
+    mixer.update(delta);
+  });
+
+  return (
+    <group ref={root} position={from.toArray()} rotation={[0, yaw, 0]}>
+      <primitive object={model} />
+    </group>
+  );
+}
+
+type SceneProps = { mode: GameMode; spot: KickSpot };
+
+function SceneContent({ handleRef, mode, spot }: SceneProps & { handleRef: React.Ref<PenaltySceneHandle> }) {
   const ball = useRef<Mesh>(null);
   const keeper = useRef<Group>(null);
   const arms = useRef<Group>(null);
   const net = useRef<Mesh>(null);
   const wall = useRef<Group>(null);
-  const shooterRig = useRef<RigNodes | null>(null);
   const timeline = useRef<Timeline | null>(null);
   const netBase = useRef<Float32Array | null>(null);
 
@@ -513,7 +628,8 @@ function SceneContent({ handleRef, mode, spot, shooter }: SceneProps & { handleR
     [origin, f, r],
   );
   const runFrom = useMemo(() => new Vector3(origin.x, 0, origin.z).addScaledVector(f, -2.4).addScaledVector(r, -0.4), [origin, f, r]);
-  const runTo = useMemo(() => new Vector3(origin.x, 0, origin.z).addScaledVector(f, -0.45).addScaledVector(r, -0.24), [origin, f, r]);
+  // Конец разбега: правая нога проходит ровно через мяч.
+  const runTo = useMemo(() => new Vector3(origin.x, 0, origin.z).addScaledVector(f, -KICK_BALL_OFFSET), [origin, f]);
 
   const aspect = useThree((s) => s.size.width / Math.max(1, s.size.height));
   const camDist = Math.hypot(cameraPos.x, cameraPos.z);
@@ -521,10 +637,6 @@ function SceneContent({ handleRef, mode, spot, shooter }: SceneProps & { handleR
   const fov = Math.min(72, Math.max(38, (2 * Math.atan(VISIBLE_HALF_WIDTH / aspect / camDist) * 180) / Math.PI));
 
   const resetPose = () => {
-    const rig = shooterRig.current;
-    rig?.root.position.copy(runFrom);
-    rig?.root.rotation.set(0, yaw, 0);
-    if (rig) [rig.legL, rig.legR, rig.armL, rig.armR, rig.torso].forEach((g) => g.rotation.set(0, 0, 0));
     ball.current?.position.set(origin.x, BALL_RADIUS, origin.z);
     ball.current?.rotation.set(0, 0, 0);
     keeper.current?.position.set(keeperHome, 0, 0.35);
@@ -558,55 +670,25 @@ function SceneContent({ handleRef, mode, spot, shooter }: SceneProps & { handleR
     const t = state.clock.getElapsedTime();
     const b = ball.current;
     const k = keeper.current;
-    const rig = shooterRig.current;
-    const shooter = rig?.root;
     const cam = state.camera;
-    if (!b || !k || !shooter) return;
+    if (!b || !k) return;
 
     cam.position.set(cameraPos.x + Math.sin(t * 0.6) * 0.04, cameraPos.y + Math.sin(t * 0.9) * 0.02, cameraPos.z);
     cam.lookAt(CAMERA_TARGET);
 
     const tl = timeline.current;
-    const legL = rig?.legL;
-    const legR = rig?.legR;
-    const armL = rig?.armL;
-    const armR = rig?.armR;
-    const torso = rig?.torso;
 
     if (!tl) {
-      // Ожидание: бьющий стоит у мяча, вратарь пружинит на ногах.
-      shooter.position.copy(runFrom);
-      shooter.rotation.set(0, yaw, 0);
-      torso?.position.setY(0.92 + Math.sin(t * 2) * 0.008);
+      // Ожидание: вратарь пружинит на ногах.
       k.position.x = keeperHome + Math.sin(t * 1.4) * 0.25;
       k.position.y = Math.abs(Math.sin(t * 2.8)) * 0.04;
       b.position.set(origin.x, BALL_RADIUS, origin.z);
       return;
     }
 
+    // Удар по мячу — через ту же паузу, что занимал разбег, чтобы темп игры не менялся.
     const since = now - tl.runStart;
-    // Разбег: шаги, мах руками; в конце — опорная нога и замах бьющей.
-    if (since < RUN_MS) {
-      const u = since / RUN_MS;
-      shooter.position.lerpVectors(runFrom, runTo, easeOut(u));
-      const stride = Math.sin(u * Math.PI * 5);
-      legL?.rotation.set(stride * 0.7, 0, 0);
-      legR?.rotation.set(-stride * 0.7 - u * 0.6, 0, 0);
-      armL?.rotation.set(-stride * 0.6, 0, -0.15);
-      armR?.rotation.set(stride * 0.6, 0, 0.15);
-      torso?.rotation.set(0.12, 0, 0);
-    } else {
-      shooter.position.copy(runTo);
-      const ready = tl.outcome != null;
-      // Удар: бьющая нога проходит сквозь мяч и выносится вперёд.
-      const kickU = ready ? clamp01((since - RUN_MS) / 260) : Math.min(0.2, (since - RUN_MS) / 260);
-      legR?.rotation.set(-1.1 + easeOut(kickU) * 2.4, 0, 0);
-      legL?.rotation.set(0.15, 0, 0);
-      armL?.rotation.set(0.3, 0, -0.9 * easeOut(kickU));
-      armR?.rotation.set(-0.4, 0, 0.5);
-      torso?.rotation.set(-0.18 * easeOut(kickU), 0, 0);
-      if (ready && tl.flightStart == null && since >= CONTACT_MS) tl.flightStart = now;
-    }
+    if (tl.outcome != null && tl.flightStart == null && since >= CONTACT_MS) tl.flightStart = now;
 
     const o = tl.outcome;
     if (!o || tl.flightStart == null) return;
@@ -681,7 +763,9 @@ function SceneContent({ handleRef, mode, spot, shooter }: SceneProps & { handleR
       <Goal netRef={net} />
       <Keeper keeperRef={keeper} armsRef={arms} />
       {mode === "freekick" && <WallPlayers spot={origin} wallRef={wall} />}
-      <Footballer rigRef={shooterRig} kit={ZHAIYQ_KIT} surname={shooter.surname} number={shooter.number} />
+      <Suspense fallback={null}>
+        <ShooterModel timeline={timeline} from={runFrom} to={runTo} yaw={yaw} />
+      </Suspense>
       <Ball ballRef={ball} spot={origin} />
     </>
   );

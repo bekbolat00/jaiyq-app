@@ -135,7 +135,6 @@ export default function PenaltyGame() {
       .catch(() => {});
   }, [loadStatus, loadLeaders]);
 
-  const shooter = shooters.find((p) => p.id === shooterId) ?? null;
   const spot: KickSpot =
     mode === "freekick" ? (practice ? practiceSpot : (status?.nextFreeKick ?? practiceSpot)) : PENALTY_SPOT;
 
@@ -249,7 +248,6 @@ export default function PenaltyGame() {
           ref={scene}
           mode={mode}
           spot={spot}
-          shooter={{ surname: shooter?.surname ?? "Жайык", number: shooter?.number && shooter.number !== "—" ? shooter.number : "10" }}
         />
       </div>
 

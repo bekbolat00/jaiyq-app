@@ -45,7 +45,7 @@ import {
   type ShotInput,
   type ShotOutcome,
 } from "@/lib/game/penalty";
-import { playKickSound } from "@/lib/game/sfx";
+import { playKickSound, playNetSound } from "@/lib/game/sfx";
 
 /**
  * Реальный полёт мяча 0.33–1.2 с — повтор замедлен, чтобы было видно, что произошло.
@@ -458,6 +458,8 @@ type Timeline = {
   onDone: (() => void) | null;
   /** Момент касания мяча: не раньше разбега и не раньше ответа сервера. */
   flightStart: number | null;
+  /** Мяч уже коснулся сетки (звук — один раз). */
+  netHit: boolean;
   done: boolean;
 };
 
@@ -736,10 +738,10 @@ function SceneContent({ handleRef, mode, spot, onKickContact }: SceneProps & { h
 
   useImperativeHandle(handleRef, () => ({
     windUp() {
-      timeline.current = { runStart: performance.now(), outcome: null, onDone: null, flightStart: null, done: false };
+      timeline.current = { runStart: performance.now(), outcome: null, onDone: null, flightStart: null, netHit: false, done: false };
     },
     play(outcome, onDone) {
-      if (!timeline.current) timeline.current = { runStart: performance.now() - CONTACT_MS, outcome: null, onDone: null, flightStart: null, done: false };
+      if (!timeline.current) timeline.current = { runStart: performance.now() - CONTACT_MS, outcome: null, onDone: null, flightStart: null, netHit: false, done: false };
       timeline.current.outcome = outcome;
       timeline.current.onDone = onDone;
     },
@@ -876,6 +878,10 @@ function SceneContent({ handleRef, mode, spot, onKickContact }: SceneProps & { h
 
     // Сетка прогибается там, куда прилетел мяч, и пару раз пружинит обратно.
     if (o.result === "goal" && elapsed > flight && net.current) {
+      if (!tl.netHit) {
+        tl.netHit = true;
+        playNetSound();
+      }
       const geo = net.current.geometry as PlaneGeometry;
       const arr = geo.attributes.position.array as Float32Array;
       if (!netBase.current) netBase.current = new Float32Array(arr);

@@ -3,7 +3,7 @@
 /* eslint-disable @next/next/no-img-element -- фото болельщиков из Telegram */
 
 import { AnimatePresence, motion } from "framer-motion";
-import { Coins, Trophy, X } from "lucide-react";
+import { Coins, Trophy, Volume2, VolumeX, X } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -18,7 +18,6 @@ import {
   PENALTY_SPOT,
   POWER_SWEET_MAX,
   POWER_SWEET_MIN,
-  SHOT_KINDS,
   simulateShot,
   type GameMode,
   type KickSpot,
@@ -27,6 +26,7 @@ import {
   type ShotOutcome,
   type ShotResult,
 } from "@/lib/game/penalty";
+import { isMuted, playCrowdReaction, preloadGameSounds, setMuted, startCrowdAmbient, stopCrowdAmbient, unlockAudio } from "@/lib/game/sfx";
 import type { ScorerCandidate } from "@/lib/kff/scorers";
 import { getTelegramInitData } from "@/lib/telegram/getInitData";
 import { haptic } from "@/lib/telegram/webApp";
@@ -55,12 +55,7 @@ const RESULT_COPY: Record<ShotResult, { title: string; tone: string }> = {
 
 const MODE_LABEL: Record<GameMode, string> = { penalty: "Пенальти", freekick: "Штрафной" };
 
-const KIND_LABEL: Record<ShotKind, { title: string; hint: string }> = {
-  straight: { title: "Прямой", hint: "Быстро и низко, без закрутки" },
-  curl: { title: "Крученый", hint: "Дуга свайпа — закрутка" },
-  lob: { title: "Парашют", hint: "Навес над вратарём, который уже прыгнул" },
-  knuckle: { title: "Наклбол", hint: "Мяч плавает — вратарь не читает" },
-};
+const KIND_LABEL: Record<ShotKind, string> = { straight: "Прямой", curl: "Крученый", lob: "Парашют", knuckle: "Наклбол" };
 
 function randomSpot(): KickSpot {
   return freeKickSpotFromSeed(Math.floor(Math.random() * 2 ** 31));
@@ -85,37 +80,72 @@ type SwipePoint = { x: number; y: number; t: number };
 const MIN_CHARGE_MS = 120;
 
 /**
+ * Тип удара по форме жеста. Все пороги — в долях длины хорды начало→конец,
+ * чтобы не зависеть от размера экрана.
+ *  - зигзаг (≥2 смены стороны) — наклбол, размах — амплитуда;
+ *  - палец поднялся и заметно опустился — парашют, высота дуги — насколько;
+ *  - одна дуга в сторону — крученый, закрутка — куда и насколько выгнули;
+ *  - иначе — прямой.
+ */
+function classifySwipe(points: SwipePoint[]): { kind: ShotKind; curve: number; shape: number; peak: SwipePoint } | null {
+  const a = points[0];
+  const b = points[points.length - 1];
+  const chord = Math.hypot(b.x - a.x, b.y - a.y);
+  const peak = points.reduce((best, p) => (p.y < best.y ? p : best), a);
+  const rise = a.y - peak.y; // на сколько палец вообще поднялся
+  if (rise < 40 || chord < 24) return null;
+
+  // Знаковое отклонение точек от хорды: слева/справа от прямой начало→конец.
+  const dev = points.map((p) => ((b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x)) / chord);
+  const threshold = Math.max(6, chord * 0.06);
+  let flips = 0;
+  let side = 0;
+  let firstSide = 0;
+  let maxAbs = 0;
+  let maxSigned = 0;
+  for (const d of dev) {
+    if (Math.abs(d) > Math.abs(maxSigned)) maxSigned = d;
+    maxAbs = Math.max(maxAbs, Math.abs(d));
+    if (Math.abs(d) < threshold) continue;
+    const sgn = Math.sign(d);
+    if (side && sgn !== side) flips++;
+    if (!firstSide) firstSide = sgn;
+    side = sgn;
+  }
+
+  const fall = b.y - peak.y; // на сколько опустился после пика
+  if (flips >= 2) return { kind: "knuckle", curve: -firstSide, shape: Math.min(1, maxAbs / (chord * 0.25)), peak };
+  if (fall > 40 && fall > rise * 0.25) return { kind: "lob", curve: 0, shape: Math.min(1, fall / (rise * 0.9)), peak };
+  if (maxAbs > chord * 0.09) return { kind: "curl", curve: Math.max(-1, Math.min(1, -maxSigned / (chord * 0.28))), shape: 0, peak };
+  return { kind: "straight", curve: 0, shape: 0, peak };
+}
+
+/**
  * Свайп прицела → параметры удара. Конец свайпа проецируется на плоскость ворот:
- * куда отпустил палец, туда (без разброса) прилетит мяч. Изгиб траектории пальца —
- * закрутка; сила уже зафиксирована шкалой.
+ * куда отпустил палец, туда (без разброса) прилетит мяч. Форма жеста задаёт тип
+ * удара и его характер; сила уже поймана на шкале.
  */
 function swipeToAim(
   points: SwipePoint[],
   power: number,
-  kind: ShotKind,
   mode: GameMode,
   goalPointAt: PenaltySceneHandle["goalPointAt"],
 ): ShotInput | null {
   if (points.length < 2) return null;
-  const a = points[0];
+  const gesture = classifySwipe(points);
+  if (!gesture) return null;
   const b = points[points.length - 1];
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  if (dy > -30) return null; // удар — это движение вверх, к воротам
-  const dist = Math.hypot(dx, dy);
   const target = goalPointAt(b.x, b.y);
   if (!target) return null;
+  const { kind, curve, shape } = gesture;
 
-  const mid = points[Math.floor(points.length / 2)];
-  // Знаковое расстояние середины свайпа от прямой начало→конец.
-  const cross = ((b.x - a.x) * (mid.y - a.y) - (b.y - a.y) * (mid.x - a.x)) / Math.max(1, dist);
-  const curve = Math.max(-1, Math.min(1, -cross / (dist * 0.18)));
   // Закрутка сносит мяч вбок (см. shotPlan) — прицел компенсирует снос, чтобы мяч пришёл под палец.
   const curveFactor = kind === "curl" ? 1 : kind === "lob" ? 0.4 : 0;
   const drift = curve * curveFactor * (mode === "freekick" ? 2.3 : 1.1) * 0.35;
 
   return {
     kind,
+    shape,
     aimX: Math.max(-1.6, Math.min(1.6, (target.x - drift) / GOAL_HALF_WIDTH)),
     aimY: Math.max(0, Math.min(1.6, target.y / GOAL_HEIGHT)),
     power,
@@ -141,7 +171,9 @@ export default function PenaltyGame() {
   /** Когда шкала силы запустилась (фаза power) и какая сила поймана. */
   const [gaugeSince, setGaugeSince] = useState<number | null>(null);
   const [power, setPower] = useState<number | null>(null);
-  const [kind, setKind] = useState<ShotKind>("curl");
+  /** Тип удара, распознанный по текущему жесту — подпись под прицелом. */
+  const [liveKind, setLiveKind] = useState<ShotKind | null>(null);
+  const [muted, setMutedState] = useState(false);
   const [inTelegram, setInTelegram] = useState(false);
 
   const exit = useCallback(() => router.push("/"), [router]);
@@ -167,6 +199,14 @@ export default function PenaltyGame() {
   }, []);
 
   useEffect(() => {
+    // Звук: качаем заранее, глушим при выходе из игры. Настройка — только на клиенте.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMutedState(isMuted());
+    preloadGameSounds();
+    return () => stopCrowdAmbient();
+  }, []);
+
+  useEffect(() => {
     // Статус и рейтинг зависят от Telegram — известны только на клиенте.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadStatus();
@@ -188,6 +228,8 @@ export default function PenaltyGame() {
 
   const start = (asPractice: boolean) => {
     haptic.impact("light");
+    unlockAudio();
+    startCrowdAmbient();
     setPractice(asPractice);
     if (mode === "freekick") setPracticeSpot(randomSpot());
     scene.current?.reset();
@@ -240,6 +282,7 @@ export default function PenaltyGame() {
     scene.current?.play(outcome, () => {
       setLast({ outcome, coins });
       setPhase("result");
+      playCrowdReaction(outcome.result);
       if (outcome.result === "goal") haptic.notify("success");
       else if (outcome.result === "post") haptic.notify("warning");
       else haptic.notify("error");
@@ -258,7 +301,15 @@ export default function PenaltyGame() {
     setPhase("aim");
   };
 
+  const toggleMute = () => {
+    const next = !muted;
+    setMuted(next);
+    setMutedState(next);
+    haptic.select();
+  };
+
   const onPointerDown = (e: React.PointerEvent) => {
+    unlockAudio();
     if (phase === "power") return catchPower();
     if (phase !== "aim") return;
     // Прицел ведём от мяча: начинать свайп можно в нижней части экрана.
@@ -272,14 +323,22 @@ export default function PenaltyGame() {
     swipe.current.push({ x: e.clientX, y: e.clientY, t: performance.now() });
     setTrail((tr) => [...tr.slice(-24), { x: e.clientX, y: e.clientY }]);
     const handle = scene.current;
-    if (handle) handle.setAimPreview(swipeToAim(swipe.current, power, kind, mode, handle.goalPointAt));
+    if (!handle) return;
+    const input = swipeToAim(swipe.current, power, mode, handle.goalPointAt);
+    handle.setAimPreview(input);
+    const k = input?.kind ?? null;
+    if (k !== liveKind) {
+      if (k) haptic.select();
+      setLiveKind(k);
+    }
   };
   const onPointerUp = () => {
     if (phase !== "aim" || !swipe.current.length || power == null) return;
     const handle = scene.current;
-    const input = handle ? swipeToAim(swipe.current, power, kind, mode, handle.goalPointAt) : null;
+    const input = handle ? swipeToAim(swipe.current, power, mode, handle.goalPointAt) : null;
     swipe.current = [];
     handle?.setAimPreview(null);
+    setLiveKind(null);
     window.setTimeout(() => setTrail([]), 180);
     if (input) void shoot(input);
   };
@@ -287,6 +346,7 @@ export default function PenaltyGame() {
   const onPointerCancel = () => {
     swipe.current = [];
     scene.current?.setAimPreview(null);
+    setLiveKind(null);
     setTrail([]);
   };
 
@@ -370,7 +430,16 @@ export default function PenaltyGame() {
             )}
           </div>
         )}
-        <span className="w-10" />
+        <button
+          type="button"
+          onClick={toggleMute}
+          onPointerDown={(e) => e.stopPropagation()}
+          aria-label={muted ? "Включить звук" : "Выключить звук"}
+          aria-pressed={muted}
+          className="pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full bg-background/60 text-foreground backdrop-blur"
+        >
+          {muted ? <VolumeX className="h-5 w-5" strokeWidth={1.75} aria-hidden /> : <Volume2 className="h-5 w-5" strokeWidth={1.75} aria-hidden />}
+        </button>
       </div>
 
       {/* След пальца — тонкий: главный ориентир при прицеливании — пунктир траектории в сцене. */}
@@ -397,30 +466,10 @@ export default function PenaltyGame() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
           >
-            <div className="pointer-events-auto mb-4 flex gap-1.5 rounded-full bg-background/70 p-1 backdrop-blur" role="radiogroup" aria-label="Тип удара">
-              {SHOT_KINDS.map((k) => (
-                <button
-                  key={k}
-                  type="button"
-                  role="radio"
-                  aria-checked={kind === k}
-                  onPointerDown={(e) => e.stopPropagation()}
-                  onClick={() => {
-                    if (kind !== k) haptic.select();
-                    setKind(k);
-                  }}
-                  className={`t-caption rounded-full px-3 py-1.5 font-medium transition-colors ${
-                    kind === k ? "bg-accent text-background" : "text-foreground/80"
-                  }`}
-                >
-                  {KIND_LABEL[k].title}
-                </button>
-              ))}
-            </div>
             <p className="t-small rounded-full bg-background/70 px-4 py-2 text-foreground backdrop-blur">
               Нажми, когда шкала в голубой зоне
             </p>
-            <p className="t-caption mt-2 text-foreground/70">{KIND_LABEL[kind].hint}</p>
+            <p className="t-caption mt-2 text-foreground/70">Слабо — мяч катится · до упора — теряешь точность</p>
           </motion.div>
         )}
         {phase === "aim" && (
@@ -437,9 +486,11 @@ export default function PenaltyGame() {
               transition={{ duration: 1.4, repeat: Infinity, ease: "easeInOut" }}
             />
             <p className="t-small rounded-full bg-background/70 px-4 py-2 text-foreground backdrop-blur">
-              Проведи от мяча к точке в воротах
+              {liveKind ? KIND_LABEL[liveKind] : "Нарисуй удар от мяча к воротам"}
             </p>
-            <p className="t-caption mt-2 text-foreground/70">Отпусти палец — удар · дугой — закрутка</p>
+            <p className="t-caption mt-2 text-center text-foreground/70">
+              Прямо · дугой — крученый · вверх и вниз — парашют · зигзагом — наклбол
+            </p>
           </motion.div>
         )}
       </AnimatePresence>

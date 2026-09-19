@@ -111,6 +111,8 @@ export type ShotOutcome = {
   };
   /** Прыжок вратаря: куда и когда он двинулся и где оказались его руки. */
   keeper: { startMs: number; startX: number; handX: number; handY: number; diveMs: number; guessed: boolean };
+  /** Тренировка: вратарь стоит в idle и не прыгает. В матче не задаётся. */
+  keeperPassive?: true;
   /** «Девятка» — угол под перекладиной. */
   topCorner: boolean;
   points: number;
@@ -137,7 +139,7 @@ export function sanitizeInput(raw: Partial<ShotInput>): ShotInput | null {
 }
 
 /** Нормальное распределение (Бокс — Мюллер). */
-function gaussian(rand: Random) {
+export function gaussian(rand: Random) {
   const u = Math.max(1e-9, rand());
   const v = rand();
   return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
@@ -194,7 +196,7 @@ export function shotSpeed(power: number, freekick: boolean, kind: ShotKind = "cu
 }
 
 /** Высота после недобора: слабый удар не поднимается и катится низом. */
-function finalHeight(y: number, power: number, over: number) {
+export function finalHeight(y: number, power: number, over: number) {
   let h = y + over * 0.3;
   if (power < POWER_SWEET_MIN) h *= 0.6 + power;
   return Math.max(BALL_RADIUS, h);
@@ -204,7 +206,7 @@ function finalHeight(y: number, power: number, over: number) {
  * Дуга: мягкий удар выше навесом, со штрафного — чтобы перелететь стенку.
  * Недобор со штрафного так не работает: вялый удар не поднимается над стенкой.
  */
-function liftFor(freekick: boolean, aimY: number, power: number, y: number, kind: ShotKind, shape: number) {
+export function liftFor(freekick: boolean, aimY: number, power: number, y: number, kind: ShotKind, shape: number) {
   const { pace, weak, g } = powerProfile(power);
   if (kind === "lob") {
     // Высота дуги — как высоко подняли палец: пик над вратарём, мяч падает сверху.
@@ -224,7 +226,7 @@ const CURVE_FACTOR: Record<ShotKind, number> = { straight: 0, curl: 1, lob: 0.4,
 /** Разброс относительно крученого: мягкий парашют точнее, наклбол — капризнее. */
 const SPREAD_FACTOR: Record<ShotKind, number> = { straight: 0.9, curl: 1, lob: 1, knuckle: 1.3 };
 
-function shotPlan(input: ShotInput, mode: GameMode, spot: KickSpot) {
+export function shotPlan(input: ShotInput, mode: GameMode, spot: KickSpot) {
   const { aimX, aimY, power, curve, kind } = input;
   const freekick = mode === "freekick";
   const origin = freekick ? spot : PENALTY_SPOT;
@@ -269,7 +271,7 @@ export function previewPath(input: ShotInput, mode: GameMode, spot: KickSpot, fr
 }
 
 /** Наклбол виляет с размахом зигзага пальца и в ту же сторону, куда пошёл первый изгиб. */
-function wobbleFor(input: ShotInput) {
+export function wobbleFor(input: ShotInput) {
   if (input.kind !== "knuckle") return undefined;
   return { amp: round(0.25 + clamp(input.shape, 0, 1) * 0.55), phase: input.curve >= 0 ? 0 : round(Math.PI) };
 }
@@ -323,9 +325,7 @@ export function simulateShot(
   // Наклбол «плавает» в середине полёта; к воротам приходит в точку, но вратарь его читает плохо.
   const wobble = wobbleFor(input);
 
-  const nearPost = Math.abs(Math.abs(x) - GOAL_HALF_WIDTH) < BALL_RADIUS * 1.05 && y < GOAL_HEIGHT + BALL_RADIUS;
-  const nearBar = Math.abs(y - GOAL_HEIGHT) < BALL_RADIUS * 1.05 && Math.abs(x) < GOAL_HALF_WIDTH + BALL_RADIUS;
-  const inside = Math.abs(x) < GOAL_HALF_WIDTH - BALL_RADIUS && y < GOAL_HEIGHT - BALL_RADIUS;
+  const frame = goalFrameResult(x, y);
 
   const wall = freekick ? wallFor(origin) : null;
   let blockedByWall = false;
@@ -342,15 +342,10 @@ export function simulateShot(
 
   let result: ShotResult;
   if (blockedByWall) result = "wall";
-  else if (nearPost || nearBar) result = "post";
-  else if (!inside) result = "miss";
+  else if (frame !== "inside") result = frame;
   else result = keeper.saves ? "saved" : "goal";
 
-  if (result === "miss") {
-    // Для анимации «мимо» мяч улетает за каркас, а не пролетает сквозь сетку.
-    if (Math.abs(x) < GOAL_HALF_WIDTH + 0.3 && y >= GOAL_HEIGHT) y = Math.max(y, GOAL_HEIGHT + 0.35);
-    else if (Math.abs(x) < GOAL_HALF_WIDTH + 0.3) x = Math.sign(x || 1) * (GOAL_HALF_WIDTH + 0.35);
-  }
+  if (result === "miss") ({ x, y } = missFlightPoint(x, y));
 
   const topCorner = result === "goal" && Math.abs(x) > GOAL_HALF_WIDTH * 0.62 && y > GOAL_HEIGHT * 0.62;
   const reward = LEVEL_REWARD[level];
@@ -377,7 +372,22 @@ export function simulateShot(
   };
 }
 
-const round = (v: number) => Math.round(v * 100) / 100;
+export const round = (v: number) => Math.round(v * 100) / 100;
+
+/** Где мяч пересёк плоскость ворот: в каркас, мимо или в створ. */
+export function goalFrameResult(x: number, y: number): "post" | "miss" | "inside" {
+  const nearPost = Math.abs(Math.abs(x) - GOAL_HALF_WIDTH) < BALL_RADIUS * 1.05 && y < GOAL_HEIGHT + BALL_RADIUS;
+  const nearBar = Math.abs(y - GOAL_HEIGHT) < BALL_RADIUS * 1.05 && Math.abs(x) < GOAL_HALF_WIDTH + BALL_RADIUS;
+  if (nearPost || nearBar) return "post";
+  return Math.abs(x) < GOAL_HALF_WIDTH - BALL_RADIUS && y < GOAL_HEIGHT - BALL_RADIUS ? "inside" : "miss";
+}
+
+/** Для анимации «мимо» мяч улетает за каркас, а не пролетает сквозь сетку. */
+export function missFlightPoint(x: number, y: number) {
+  if (Math.abs(x) < GOAL_HALF_WIDTH + 0.3 && y >= GOAL_HEIGHT) return { x, y: Math.max(y, GOAL_HEIGHT + 0.35) };
+  if (Math.abs(x) < GOAL_HALF_WIDTH + 0.3) return { x: Math.sign(x || 1) * (GOAL_HALF_WIDTH + 0.35), y };
+  return { x, y };
+}
 
 /**
  * Вратарь. Два поведения, как у настоящих:

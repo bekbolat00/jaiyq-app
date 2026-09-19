@@ -47,6 +47,7 @@ import {
   type ShotOutcome,
 } from "@/lib/game/penalty";
 import { playKickSound, playNetSound } from "@/lib/game/sfx";
+import { TARGET_RINGS, type Target } from "@/lib/game/training";
 
 /**
  * Реальный полёт мяча 0.33–1.2 с — повтор замедлен, чтобы было видно, что произошло.
@@ -280,6 +281,29 @@ function Goal({ netRef }: { netRef: React.RefObject<Mesh | null> }) {
         <planeGeometry args={[GOAL_HALF_WIDTH * 2, NET_DEPTH, 36, 8]} />
         <meshBasicMaterial color="#ffffff" wireframe transparent opacity={0.22} side={DoubleSide} />
       </mesh>
+    </group>
+  );
+}
+
+/**
+ * Мишень тренировки точности на плоскости ворот: внешнее, среднее кольцо и
+ * центр. Радиусы — те же, по которым считаются очки (TARGET_RINGS).
+ */
+function TargetRings({ target }: { target: Target }) {
+  const bands = [
+    { inner: TARGET_RINGS.middle, outer: TARGET_RINGS.outer, color: "#f5f7fb", opacity: 0.5 },
+    { inner: TARGET_RINGS.center, outer: TARGET_RINGS.middle, color: "#00e8f0", opacity: 0.55 },
+    { inner: 0, outer: TARGET_RINGS.center, color: "#ff3b5c", opacity: 0.85 },
+  ];
+  return (
+    // Чуть перед линией ворот, чтобы не мерцать с сеткой; поверх всего, кроме интерфейса.
+    <group position={[target.x, target.y, 0.02]}>
+      {bands.map((b) => (
+        <mesh key={b.outer} renderOrder={2}>
+          <ringGeometry args={[b.inner, b.outer, 48]} />
+          <meshBasicMaterial color={b.color} transparent opacity={b.opacity} depthWrite={false} side={DoubleSide} />
+        </mesh>
+      ))}
     </group>
   );
 }
@@ -754,7 +778,8 @@ function KeeperModel({ timeline, keeperRef, home }: {
     const tl = timeline.current;
     const o = tl?.outcome ?? null;
 
-    if (!o || !tl || tl.flightStart == null) {
+    // Пассивный вратарь (тренировка) остаётся в ожидании и во время удара.
+    if (!o || !tl || tl.flightStart == null || o.keeperPassive) {
       // Ожидание удара: переминается на линии.
       if (plan.current) {
         plan.current = null;
@@ -820,9 +845,11 @@ type SceneProps = {
   spot: KickSpot;
   /** Нога коснулась мяча: `pace` 0..1 — сила удара. Для вибрации. */
   onKickContact?: (pace: number) => void;
+  /** Мишень тренировки точности; без неё сцена — как в матче. */
+  target?: Target | null;
 };
 
-function SceneContent({ handleRef, mode, spot, onKickContact }: SceneProps & { handleRef: React.Ref<PenaltySceneHandle> }) {
+function SceneContent({ handleRef, mode, spot, onKickContact, target }: SceneProps & { handleRef: React.Ref<PenaltySceneHandle> }) {
   const ball = useRef<Mesh>(null);
   const keeper = useRef<Group>(null);
   const net = useRef<Mesh>(null);
@@ -1032,6 +1059,7 @@ function SceneContent({ handleRef, mode, spot, onKickContact }: SceneProps & { h
       <Stands />
       <Pitch />
       <Goal netRef={net} />
+      {target && <TargetRings target={target} />}
       <Suspense fallback={null}>
         <KeeperModel timeline={timeline} keeperRef={keeper} home={keeperHome} />
       </Suspense>

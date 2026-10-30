@@ -35,7 +35,7 @@ const { scrapeMatch } = require("./kffScraper.js");
 
 const API_BASE = "https://kffleague.kz/api/v1";
 const USER_AGENT =
-  "Mozilla/5.0 (compatible; ZhaiyqAppMatchScraper/1.0; +https://kffleague.kz/ru/matches)";
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36";
 const ZHAIYQ_KFF_TEAM_ID = 633;
 const REQUEST_DELAY_MS = 400;
 const COMPETITION_LABEL = "ПЕРВАЯ ЛИГА КАЗАХСТАНА 2026";

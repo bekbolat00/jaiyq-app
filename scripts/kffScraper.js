@@ -56,7 +56,7 @@ const fs = require("fs");
 const path = require("path");
 
 const USER_AGENT =
-  "Mozilla/5.0 (compatible; ZhaiyqAppMatchScraper/1.0; +https://kffleague.kz/ru/matches)";
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36";
 
 /** Принимает и голый ID ("1274"), и полный URL страницы матча. */
 function resolveMatchUrl(input) {
